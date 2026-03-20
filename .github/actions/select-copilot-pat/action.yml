@@ -1,0 +1,60 @@
+name: 'Select Copilot PAT from Pool'
+description: >
+  Selects a Copilot PAT from a numbered pool of secrets using round-robin
+  with random fallback. Secrets are passed as environment variables
+  COPILOT_PAT_0 through COPILOT_PAT_9 by the calling workflow step.
+
+inputs:
+  random-seed:
+    description: 'A seed number to use for the random PAT selection, for deterministic selection if needed.'
+    required: false
+    default: ''
+
+outputs:
+  copilot_pat:
+    description: 'The selected token value (masked in logs)'
+    value: ${{ steps.select.outputs.copilot_pat }}
+
+runs:
+  using: composite
+  steps:
+    - id: select-pat
+      shell: bash
+      env:
+        RANDOM_SEED: ${{ inputs.random-seed }}
+      run: |
+        # Collect all non-empty secret values from COPILOT_PAT_0..COPILOT_PAT_9
+        TOKENS=()
+        for i in $(seq 0 9); do
+          var="COPILOT_PAT_${i}"
+          val="${!var}"
+          if [ -n "$val" ]; then
+            TOKENS+=("$val")
+          fi
+        done
+
+        if [ ${#TOKENS[@]} -eq 0 ]; then
+          echo "::error::No Copilot PAT secrets found (checked COPILOT_PAT_0 through COPILOT_PAT_9)"
+          exit 1
+        fi
+
+        # Select a random number, using the seed if specified
+        if [ -n "$RANDOM_SEED" ]; then
+          RANDOM=$RANDOM_SEED
+        fi
+
+        PAT_INDEX=$(( RANDOM % ${#TOKENS[@]} ))
+        COPILOT_PAT="${TOKENS[$PAT_INDEX]}"
+        echo "Selected token ${IDX} via ${METHOD} (pool size: ${#TOKENS[@]})"
+
+        # Verify: must be a fine-grained PAT (prefix github_pat_)
+        if [[ "$COPILOT_PAT" != github_pat_* ]]; then
+          echo "::error::Selected token is not a fine-grained PAT (expected github_pat_ prefix). Classic PATs are not allowed."
+          exit 1
+        fi
+
+        # Mask the token value so it never appears in logs
+        echo "::add-mask::${COPILOT_PAT}"
+
+        # Set outputs
+        echo "copilot_pat=${COPILOT_PAT}" >> "$GITHUB_OUTPUT"
