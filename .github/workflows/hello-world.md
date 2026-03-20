@@ -5,6 +5,14 @@ on:
     contents: read
 
   steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      name: Checkout the select-copilot-pat action folder
+      with:
+        persist-credentials: false
+        sparse-checkout: .github/actions/select-copilot-pat
+        sparse-checkout-cone-mode: true
+        fetch-depth: 1
+
     - id: select-copilot-pat
       name: Select Copilot token from pool
       uses: ./.github/actions/select-copilot-pat

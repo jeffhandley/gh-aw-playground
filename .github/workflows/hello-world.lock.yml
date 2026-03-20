@@ -21,13 +21,20 @@
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"d4887fee7e895483789509f00255528f08d2893c8154f5c0ef0be56b0463ea1b","compiler_version":"v0.62.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"f5af1b1488b8b4101e6eec7d422be740bf336d16147ea165e60917b1b0e426a7","compiler_version":"v0.62.2","strict":true}
 
 name: "Hello World"
 "on":
   # permissions: # Permissions applied to pre-activation job
     # contents: read
   # steps: # Steps injected into pre-activation job
+  # - name: Checkout the select-copilot-pat action folder
+    # uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+    # with:
+      # fetch-depth: 1
+      # persist-credentials: false
+      # sparse-checkout: .github/actions/select-copilot-pat
+      # sparse-checkout-cone-mode: true
   # - env:
       # COPILOT_PAT_0: PAT 0
       # COPILOT_PAT_1: PAT 1
@@ -975,6 +982,13 @@ jobs:
             setupGlobals(core, github, context, exec, io);
             const { main } = require('${{ runner.temp }}/gh-aw/actions/check_membership.cjs');
             await main();
+      - name: Checkout the select-copilot-pat action folder
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: .github/actions/select-copilot-pat
+          sparse-checkout-cone-mode: true
       - name: Select Copilot token from pool
         id: select-copilot-pat
         uses: ./.github/actions/select-copilot-pat
