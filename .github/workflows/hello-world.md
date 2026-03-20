@@ -17,12 +17,19 @@ on:
       name: Select Copilot token from pool
       uses: ./.github/actions/select-copilot-pat
       env:
-        COPILOT_PAT_0: "PAT 0"
-        COPILOT_PAT_1: "PAT 1"
+        COPILOT_PAT_0: ${{ secrets.COPILOT_HELLO_0 }}
+        COPILOT_PAT_1: ${{ secrets.COPILOT_HELLO_1 }}
+        COPILOT_PAT_2: ${{ secrets.COPILOT_HELLO_2 }}
+
 jobs:
   pre-activation:
     outputs:
       copilot_pat: ${{ steps.select-copilot-pat.outputs.copilot_pat }}
+
+engine:
+  id: copilot
+  env:
+    COPILOT_GITHUB_TOKEN: ${{ needs.pre_activation.outputs.copilot_pat }}
 
 permissions:
   contents: read
