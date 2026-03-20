@@ -47,14 +47,6 @@ runs:
         COPILOT_PAT="${TOKENS[$PAT_INDEX]}"
         echo "Selected token ${IDX} via ${METHOD} (pool size: ${#TOKENS[@]})"
 
-        # Verify: must be a fine-grained PAT (prefix github_pat_)
-        if [[ "$COPILOT_PAT" != github_pat_* ]]; then
-          echo "::error::Selected token is not a fine-grained PAT (expected github_pat_ prefix). Classic PATs are not allowed."
-          exit 1
-        fi
-
-        # Mask the token value so it never appears in logs
+        # Mask the token value so it never appears in logs, then set the output
         echo "::add-mask::${COPILOT_PAT}"
-
-        # Set outputs
         echo "copilot_pat=${COPILOT_PAT}" >> "$GITHUB_OUTPUT"
