@@ -13,12 +13,12 @@ inputs:
 outputs:
   copilot_pat_number:
     description: 'The selected token number'
-    value: ${{ steps.select.outputs.copilot_pat_number }}
+    value: ${{ steps.select-pat-number.outputs.copilot_pat_number }}
 
 runs:
   using: composite
   steps:
-    - id: select-pat
+    - id: select-pat-number
       shell: bash
       env:
         RANDOM_SEED: ${{ inputs.random-seed }}
@@ -46,6 +46,7 @@ runs:
         PAT_INDEX=$(( RANDOM % ${#PAT_NUMBERS[@]} ))
         PAT_NUMBER="${PAT_NUMBERS[$PAT_INDEX]}"
         echo "Selected token ${PAT_NUMBER} (index: ${PAT_INDEX}; pool size: ${#PAT_NUMBERS[@]})"
+        echo "Selected token ${PAT_NUMBER} (index: ${PAT_INDEX}; pool size: ${#PAT_NUMBERS[@]})" >> $GITHUB_STEP_SUMMARY
 
         # Set the PAT number as the output
         echo "copilot_pat_number=${PAT_NUMBER}" >> "$GITHUB_OUTPUT"
