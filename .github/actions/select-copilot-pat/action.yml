@@ -1,8 +1,8 @@
 name: 'Select Copilot PAT from Pool'
 description: >
-  Selects a Copilot PAT from a numbered pool of secrets using round-robin
-  with random fallback. Secrets are passed as environment variables
-  COPILOT_PAT_0 through COPILOT_PAT_9 by the calling workflow step.
+  Selects a random Copilot PAT from a numbered pool of secrets. Secrets
+  are passed as environment variables COPILOT_PAT_0 through COPILOT_PAT_9
+  by the calling workflow step.
 
 inputs:
   random-seed:
@@ -11,9 +11,9 @@ inputs:
     default: ''
 
 outputs:
-  copilot_pat:
-    description: 'The selected token value (masked in logs)'
-    value: ${{ steps.select.outputs.copilot_pat }}
+  copilot_pat_number:
+    description: 'The selected token number'
+    value: ${{ steps.select.outputs.copilot_pat_number }}
 
 runs:
   using: composite
@@ -23,30 +23,29 @@ runs:
       env:
         RANDOM_SEED: ${{ inputs.random-seed }}
       run: |
-        # Collect all non-empty secret values from COPILOT_PAT_0..COPILOT_PAT_9
-        TOKENS=()
+        # Collect all secret numbers with non-empty values from COPILOT_PAT_0..COPILOT_PAT_9
+        PAT_NUMBERS=()
         for i in $(seq 0 9); do
           var="COPILOT_PAT_${i}"
           val="${!var}"
           if [ -n "$val" ]; then
-            TOKENS+=("$val")
+            PAT_NUMBERS+=(i)
           fi
         done
 
-        if [ ${#TOKENS[@]} -eq 0 ]; then
+        if [ ${#PAT_NUMBERS[@]} -eq 0 ]; then
           echo "::error::No Copilot PAT secrets found (checked COPILOT_PAT_0 through COPILOT_PAT_9)"
           exit 1
         fi
 
-        # Select a random number, using the seed if specified
+        # Select a random index using the seed if specified
         if [ -n "$RANDOM_SEED" ]; then
           RANDOM=$RANDOM_SEED
         fi
 
-        PAT_INDEX=$(( RANDOM % ${#TOKENS[@]} ))
-        COPILOT_PAT="${TOKENS[$PAT_INDEX]}"
-        echo "Selected token ${IDX} via ${METHOD} (pool size: ${#TOKENS[@]})"
+        PAT_INDEX=$(( RANDOM % ${#PAT_NUMBERS[@]} ))
+        PAT_NUMBER="${PAT_NUMBERS[$PAT_INDEX]}"
+        echo "Selected token ${PAT_NUMBER} (index: ${PAT_INDEX}; pool size: ${#PAT_NUMBERS[@]})"
 
-        # Mask the token value so it never appears in logs, then set the output
-        echo "::add-mask::${COPILOT_PAT}"
-        echo "copilot_pat=${COPILOT_PAT}" >> "$GITHUB_OUTPUT"
+        # Set the PAT number as the output
+        echo "copilot_pat_number=${PAT_NUMBER}" >> "$GITHUB_OUTPUT"

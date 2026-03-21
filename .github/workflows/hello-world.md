@@ -24,12 +24,12 @@ on:
 jobs:
   pre-activation:
     outputs:
-      copilot_pat: ${{ steps.select-copilot-pat.outputs.copilot_pat }}
+      copilot_pat_number: ${{ steps.select-copilot-pat.outputs.copilot_pat_number }}
 
 engine:
   id: copilot
   env:
-    COPILOT_GITHUB_TOKEN: ${{ needs.pre_activation.outputs.copilot_pat }}
+    COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre-activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre-activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2) }}
 
 permissions:
   contents: read
