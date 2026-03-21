@@ -29,7 +29,7 @@ runs:
           var="COPILOT_PAT_${i}"
           val="${!var}"
           if [ -n "$val" ]; then
-            PAT_NUMBERS+=(i)
+            PAT_NUMBERS+=(${i})
           fi
         done
 
