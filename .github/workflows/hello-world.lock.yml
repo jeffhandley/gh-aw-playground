@@ -21,7 +21,7 @@
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"5a6e239f17edca9199bd972baf6e488cf60d6c6c1c674dce723b175b5c233eb6","compiler_version":"v0.62.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"093b7b879333dff49ae8f6d734b62b52680f8cd82a58eaba5e568041f84c6080","compiler_version":"v0.62.2","strict":true}
 
 name: "Hello World"
 "on":
@@ -39,6 +39,13 @@ name: "Hello World"
       # COPILOT_PAT_0: ${{ secrets.COPILOT_HELLO_0 }}
       # COPILOT_PAT_1: ${{ secrets.COPILOT_HELLO_1 }}
       # COPILOT_PAT_2: ${{ secrets.COPILOT_HELLO_2 }}
+      # COPILOT_PAT_3: ${{ secrets.COPILOT_HELLO_3 }}
+      # COPILOT_PAT_4: ${{ secrets.COPILOT_HELLO_4 }}
+      # COPILOT_PAT_5: ${{ secrets.COPILOT_HELLO_5 }}
+      # COPILOT_PAT_6: ${{ secrets.COPILOT_HELLO_6 }}
+      # COPILOT_PAT_7: ${{ secrets.COPILOT_HELLO_7 }}
+      # COPILOT_PAT_8: ${{ secrets.COPILOT_HELLO_8 }}
+      # COPILOT_PAT_9: ${{ secrets.COPILOT_HELLO_9 }}
     # id: select-copilot-pat
     # name: Select Copilot token from pool
     # uses: ./.github/actions/select-copilot-pat
@@ -99,7 +106,7 @@ jobs:
         id: validate-secret
         run: ${RUNNER_TEMP}/gh-aw/actions/validate_multi_secret.sh COPILOT_GITHUB_TOKEN 'GitHub Copilot CLI' https://github.github.com/gh-aw/reference/engines/#github-copilot-default
         env:
-          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, needs.pre_activation.outputs.copilot_pat_number == 2, secrets.COPILOT_HELLO_2, secrets.COPILOT_GITHUB_TOKEN) }}
+          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, needs.pre_activation.outputs.copilot_pat_number == '3', secrets.COPILOT_HELLO_3, needs.pre_activation.outputs.copilot_pat_number == '4', secrets.COPILOT_HELLO_4, needs.pre_activation.outputs.copilot_pat_number == '5', secrets.COPILOT_HELLO_5, needs.pre_activation.outputs.copilot_pat_number == '6', secrets.COPILOT_HELLO_6, needs.pre_activation.outputs.copilot_pat_number == '7', secrets.COPILOT_HELLO_7, needs.pre_activation.outputs.copilot_pat_number == '8', secrets.COPILOT_HELLO_8, needs.pre_activation.outputs.copilot_pat_number == '9', secrets.COPILOT_HELLO_9, secrets.COPILOT_GITHUB_TOKEN) }}
       - name: Checkout .github and .agents folders
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -575,7 +582,7 @@ jobs:
             -- /bin/bash -c '/usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --add-dir "${GITHUB_WORKSPACE}" --disable-builtin-mcps --allow-all-tools --allow-all-paths --prompt "$(cat /tmp/gh-aw/aw-prompts/prompt.txt)"' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
         env:
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
-          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, needs.pre_activation.outputs.copilot_pat_number == 2, secrets.COPILOT_HELLO_2, secrets.COPILOT_GITHUB_TOKEN) }}
+          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, needs.pre_activation.outputs.copilot_pat_number == '3', secrets.COPILOT_HELLO_3, needs.pre_activation.outputs.copilot_pat_number == '4', secrets.COPILOT_HELLO_4, needs.pre_activation.outputs.copilot_pat_number == '5', secrets.COPILOT_HELLO_5, needs.pre_activation.outputs.copilot_pat_number == '6', secrets.COPILOT_HELLO_6, needs.pre_activation.outputs.copilot_pat_number == '7', secrets.COPILOT_HELLO_7, needs.pre_activation.outputs.copilot_pat_number == '8', secrets.COPILOT_HELLO_8, needs.pre_activation.outputs.copilot_pat_number == '9', secrets.COPILOT_HELLO_9, secrets.COPILOT_GITHUB_TOKEN) }}
           COPILOT_MODEL: ${{ vars.GH_AW_MODEL_AGENT_COPILOT || '' }}
           GH_AW_MCP_CONFIG: /home/runner/.copilot/mcp-config.json
           GH_AW_PHASE: agent
@@ -594,8 +601,6 @@ jobs:
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
-          HELLO_LOOKUP: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', 'Secret 0', needs.pre_activation.outputs.copilot_pat_number == '1', 'Secret 1', needs.pre_activation.outputs.copilot_pat_number == '2', 'Secret 2', needs.pre_activation.outputs.copilot_pat_number == 2, 'Numeric 2!', 'Huh; no match') }}
-          HELLO_NUMBER: ${{ needs.pre_activation.outputs.copilot_pat_number }}
           XDG_CONFIG_HOME: /home/runner
       - name: Detect inference access error
         id: detect-inference-error
@@ -650,11 +655,18 @@ jobs:
             const { main } = require('${{ runner.temp }}/gh-aw/actions/redact_secrets.cjs');
             await main();
         env:
-          GH_AW_SECRET_NAMES: 'COPILOT_GITHUB_TOKEN,COPILOT_HELLO_0,COPILOT_HELLO_1,COPILOT_HELLO_2,GH_AW_GITHUB_MCP_SERVER_TOKEN,GH_AW_GITHUB_TOKEN,GITHUB_TOKEN'
+          GH_AW_SECRET_NAMES: 'COPILOT_GITHUB_TOKEN,COPILOT_HELLO_0,COPILOT_HELLO_1,COPILOT_HELLO_2,COPILOT_HELLO_3,COPILOT_HELLO_4,COPILOT_HELLO_5,COPILOT_HELLO_6,COPILOT_HELLO_7,COPILOT_HELLO_8,COPILOT_HELLO_9,GH_AW_GITHUB_MCP_SERVER_TOKEN,GH_AW_GITHUB_TOKEN,GITHUB_TOKEN'
           SECRET_COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           SECRET_COPILOT_HELLO_0: ${{ secrets.COPILOT_HELLO_0 }}
           SECRET_COPILOT_HELLO_1: ${{ secrets.COPILOT_HELLO_1 }}
           SECRET_COPILOT_HELLO_2: ${{ secrets.COPILOT_HELLO_2 }}
+          SECRET_COPILOT_HELLO_3: ${{ secrets.COPILOT_HELLO_3 }}
+          SECRET_COPILOT_HELLO_4: ${{ secrets.COPILOT_HELLO_4 }}
+          SECRET_COPILOT_HELLO_5: ${{ secrets.COPILOT_HELLO_5 }}
+          SECRET_COPILOT_HELLO_6: ${{ secrets.COPILOT_HELLO_6 }}
+          SECRET_COPILOT_HELLO_7: ${{ secrets.COPILOT_HELLO_7 }}
+          SECRET_COPILOT_HELLO_8: ${{ secrets.COPILOT_HELLO_8 }}
+          SECRET_COPILOT_HELLO_9: ${{ secrets.COPILOT_HELLO_9 }}
           SECRET_GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
           SECRET_GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -803,7 +815,7 @@ jobs:
             -- /bin/bash -c '/usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --add-dir "${GITHUB_WORKSPACE}" --disable-builtin-mcps --allow-tool '\''shell(cat)'\'' --allow-tool '\''shell(grep)'\'' --allow-tool '\''shell(head)'\'' --allow-tool '\''shell(jq)'\'' --allow-tool '\''shell(ls)'\'' --allow-tool '\''shell(tail)'\'' --allow-tool '\''shell(wc)'\'' --prompt "$(cat /tmp/gh-aw/aw-prompts/prompt.txt)"' 2>&1 | tee -a /tmp/gh-aw/threat-detection/detection.log
         env:
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
-          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, needs.pre_activation.outputs.copilot_pat_number == 2, secrets.COPILOT_HELLO_2, secrets.COPILOT_GITHUB_TOKEN) }}
+          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, needs.pre_activation.outputs.copilot_pat_number == '3', secrets.COPILOT_HELLO_3, needs.pre_activation.outputs.copilot_pat_number == '4', secrets.COPILOT_HELLO_4, needs.pre_activation.outputs.copilot_pat_number == '5', secrets.COPILOT_HELLO_5, needs.pre_activation.outputs.copilot_pat_number == '6', secrets.COPILOT_HELLO_6, needs.pre_activation.outputs.copilot_pat_number == '7', secrets.COPILOT_HELLO_7, needs.pre_activation.outputs.copilot_pat_number == '8', secrets.COPILOT_HELLO_8, needs.pre_activation.outputs.copilot_pat_number == '9', secrets.COPILOT_HELLO_9, secrets.COPILOT_GITHUB_TOKEN) }}
           COPILOT_MODEL: ${{ vars.GH_AW_MODEL_DETECTION_COPILOT || '' }}
           GH_AW_PHASE: detection
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
@@ -819,8 +831,6 @@ jobs:
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
-          HELLO_LOOKUP: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', 'Secret 0', needs.pre_activation.outputs.copilot_pat_number == '1', 'Secret 1', needs.pre_activation.outputs.copilot_pat_number == '2', 'Secret 2', needs.pre_activation.outputs.copilot_pat_number == 2, 'Numeric 2!', 'Huh; no match') }}
-          HELLO_NUMBER: ${{ needs.pre_activation.outputs.copilot_pat_number }}
           XDG_CONFIG_HOME: /home/runner
       - name: Parse threat detection results
         id: parse_detection_results
@@ -1004,6 +1014,13 @@ jobs:
           COPILOT_PAT_0: ${{ secrets.COPILOT_HELLO_0 }}
           COPILOT_PAT_1: ${{ secrets.COPILOT_HELLO_1 }}
           COPILOT_PAT_2: ${{ secrets.COPILOT_HELLO_2 }}
+          COPILOT_PAT_3: ${{ secrets.COPILOT_HELLO_3 }}
+          COPILOT_PAT_4: ${{ secrets.COPILOT_HELLO_4 }}
+          COPILOT_PAT_5: ${{ secrets.COPILOT_HELLO_5 }}
+          COPILOT_PAT_6: ${{ secrets.COPILOT_HELLO_6 }}
+          COPILOT_PAT_7: ${{ secrets.COPILOT_HELLO_7 }}
+          COPILOT_PAT_8: ${{ secrets.COPILOT_HELLO_8 }}
+          COPILOT_PAT_9: ${{ secrets.COPILOT_HELLO_9 }}
 
   safe_outputs:
     needs: agent

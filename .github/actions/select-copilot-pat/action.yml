@@ -33,9 +33,11 @@ runs:
           fi
         done
 
+        # If none of the secrets in the pool have values, then emit a warning and do not
+        # set an output value. The consumer can then fall back to using COPILOT_GITHUB_TOKEN.
         if [ ${#PAT_NUMBERS[@]} -eq 0 ]; then
-          echo "::error::No Copilot PAT secrets found (checked COPILOT_PAT_0 through COPILOT_PAT_9)"
-          exit 1
+          echo "::warning::No Copilot PAT secrets found (checked COPILOT_PAT_0 through COPILOT_PAT_9)"
+          exit 0
         fi
 
         # Select a random index using the seed if specified
@@ -46,7 +48,6 @@ runs:
         PAT_INDEX=$(( RANDOM % ${#PAT_NUMBERS[@]} ))
         PAT_NUMBER="${PAT_NUMBERS[$PAT_INDEX]}"
         echo "Selected token ${PAT_NUMBER} (index: ${PAT_INDEX}; pool size: ${#PAT_NUMBERS[@]})"
-        echo "Selected token ${PAT_NUMBER} (index: ${PAT_INDEX}; pool size: ${#PAT_NUMBERS[@]})" >> $GITHUB_STEP_SUMMARY
 
         # Set the PAT number as the output
         echo "copilot_pat_number=${PAT_NUMBER}" >> "$GITHUB_OUTPUT"

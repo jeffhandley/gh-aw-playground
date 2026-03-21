@@ -1,9 +1,40 @@
 ---
+permissions:
+  contents: read
+
+network:
+  allowed:
+    - defaults
+
+safe-outputs:
+  noop:
+
 on:
   workflow_dispatch:
   permissions:
     contents: read
 
+# #####################################################################
+# Override the GITHUB_COPILOT_TOKEN secret usage for the workflow
+# with a randomly-selected token from a pool of secrets.
+#
+# As soon as organization-level billing is offered for Agentic
+# Workflows, this stop-gap approach will be removed.
+#
+# Different workflows can use different pools of secrets if desired,
+# by changing the COPILOT_PAT_0 through COPILOT_PAT_9 secrets to
+# any desired secret names.
+#
+# References:
+# - https://github.github.com/gh-aw/reference/frontmatter/#custom-steps-steps
+# - https://github.github.com/gh-aw/reference/frontmatter/#custom-jobs-jobs
+# - https://github.github.com/gh-aw/reference/frontmatter/#job-outputs
+# - https://github.github.com/gh-aw/reference/frontmatter/#ai-engine-engine
+# - https://github.github.com/gh-aw/reference/engines/#engine-environment-variables
+# - https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#case
+# - [Update agentic engine token handling to use user-provided secrets (github/gh-aw#18017)](https://github.com/github/gh-aw/pull/18017)
+
+  # Add the pre-activation step of selecting a random PAT from the supplied secrets
   steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       name: Checkout the select-copilot-pat action folder
@@ -20,28 +51,29 @@ on:
         COPILOT_PAT_0: ${{ secrets.COPILOT_HELLO_0 }}
         COPILOT_PAT_1: ${{ secrets.COPILOT_HELLO_1 }}
         COPILOT_PAT_2: ${{ secrets.COPILOT_HELLO_2 }}
+        COPILOT_PAT_3: ${{ secrets.COPILOT_HELLO_3 }}
+        COPILOT_PAT_4: ${{ secrets.COPILOT_HELLO_4 }}
+        COPILOT_PAT_5: ${{ secrets.COPILOT_HELLO_5 }}
+        COPILOT_PAT_6: ${{ secrets.COPILOT_HELLO_6 }}
+        COPILOT_PAT_7: ${{ secrets.COPILOT_HELLO_7 }}
+        COPILOT_PAT_8: ${{ secrets.COPILOT_HELLO_8 }}
+        COPILOT_PAT_9: ${{ secrets.COPILOT_HELLO_9 }}
 
+# Add the pre-activation output of the randomly selected PAT
 jobs:
   pre-activation:
     outputs:
       copilot_pat_number: ${{ steps.select-copilot-pat.outputs.copilot_pat_number }}
 
+# Override the COPILOT_GITHUB_TOKEN expression used in the activation job
+# Consume the PAT number from the pre-activation step and select the corresponding secret
 engine:
   id: copilot
   env:
-    HELLO_NUMBER: ${{ needs.pre_activation.outputs.copilot_pat_number }}
-    HELLO_LOOKUP: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', 'Secret 0', needs.pre_activation.outputs.copilot_pat_number == '1', 'Secret 1', needs.pre_activation.outputs.copilot_pat_number == '2', 'Secret 2', needs.pre_activation.outputs.copilot_pat_number == 2, 'Numeric 2!', 'Huh; no match') }}
-    COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, needs.pre_activation.outputs.copilot_pat_number == 2, secrets.COPILOT_HELLO_2, secrets.COPILOT_GITHUB_TOKEN) }}
+    # We cannot use line breaks in this expression as it leads to a syntax error in the compiled workflow
+    # If none of the `COPILOT_PAT_#` secrets were selected, then the default COPILOT_GITHUB_TOKEN is used
+    COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, needs.pre_activation.outputs.copilot_pat_number == '3', secrets.COPILOT_HELLO_3, needs.pre_activation.outputs.copilot_pat_number == '4', secrets.COPILOT_HELLO_4, needs.pre_activation.outputs.copilot_pat_number == '5', secrets.COPILOT_HELLO_5, needs.pre_activation.outputs.copilot_pat_number == '6', secrets.COPILOT_HELLO_6, needs.pre_activation.outputs.copilot_pat_number == '7', secrets.COPILOT_HELLO_7, needs.pre_activation.outputs.copilot_pat_number == '8', secrets.COPILOT_HELLO_8, needs.pre_activation.outputs.copilot_pat_number == '9', secrets.COPILOT_HELLO_9, secrets.COPILOT_GITHUB_TOKEN) }}
 
-permissions:
-  contents: read
-
-network:
-  allowed:
-    - defaults
-
-safe-outputs:
-  noop:
 ---
 
 ## Hello World - Baby Name Rhyme Generator
