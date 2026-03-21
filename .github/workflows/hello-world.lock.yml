@@ -21,7 +21,7 @@
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"f28e466f0c53eff26c612deb50e836df4bd9f40b3c461bdcc15b605d262d4a5c","compiler_version":"v0.62.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"01ff2c64eaa2b3b100114edfc57162cdd14fcaf4ef8dcc519b1286a215537c1a","compiler_version":"v0.62.2","strict":true}
 
 name: "Hello World"
 "on":
@@ -99,7 +99,7 @@ jobs:
         id: validate-secret
         run: ${RUNNER_TEMP}/gh-aw/actions/validate_multi_secret.sh COPILOT_GITHUB_TOKEN 'GitHub Copilot CLI' https://github.github.com/gh-aw/reference/engines/#github-copilot-default
         env:
-          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre-activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1) }}
+          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre-activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre-activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, secrets.COPILOT_GITHUB_TOKEN) }}
       - name: Checkout .github and .agents folders
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -575,7 +575,7 @@ jobs:
             -- /bin/bash -c '/usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --add-dir "${GITHUB_WORKSPACE}" --disable-builtin-mcps --allow-all-tools --allow-all-paths --prompt "$(cat /tmp/gh-aw/aw-prompts/prompt.txt)"' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
         env:
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
-          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre-activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1) }}
+          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre-activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre-activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, secrets.COPILOT_GITHUB_TOKEN) }}
           COPILOT_MODEL: ${{ vars.GH_AW_MODEL_AGENT_COPILOT || '' }}
           GH_AW_MCP_CONFIG: /home/runner/.copilot/mcp-config.json
           GH_AW_PHASE: agent
@@ -648,9 +648,11 @@ jobs:
             const { main } = require('${{ runner.temp }}/gh-aw/actions/redact_secrets.cjs');
             await main();
         env:
-          GH_AW_SECRET_NAMES: 'COPILOT_HELLO_0,COPILOT_HELLO_1,GH_AW_GITHUB_MCP_SERVER_TOKEN,GH_AW_GITHUB_TOKEN,GITHUB_TOKEN'
+          GH_AW_SECRET_NAMES: 'COPILOT_GITHUB_TOKEN,COPILOT_HELLO_0,COPILOT_HELLO_1,COPILOT_HELLO_2,GH_AW_GITHUB_MCP_SERVER_TOKEN,GH_AW_GITHUB_TOKEN,GITHUB_TOKEN'
+          SECRET_COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           SECRET_COPILOT_HELLO_0: ${{ secrets.COPILOT_HELLO_0 }}
           SECRET_COPILOT_HELLO_1: ${{ secrets.COPILOT_HELLO_1 }}
+          SECRET_COPILOT_HELLO_2: ${{ secrets.COPILOT_HELLO_2 }}
           SECRET_GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
           SECRET_GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -799,7 +801,7 @@ jobs:
             -- /bin/bash -c '/usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --add-dir "${GITHUB_WORKSPACE}" --disable-builtin-mcps --allow-tool '\''shell(cat)'\'' --allow-tool '\''shell(grep)'\'' --allow-tool '\''shell(head)'\'' --allow-tool '\''shell(jq)'\'' --allow-tool '\''shell(ls)'\'' --allow-tool '\''shell(tail)'\'' --allow-tool '\''shell(wc)'\'' --prompt "$(cat /tmp/gh-aw/aw-prompts/prompt.txt)"' 2>&1 | tee -a /tmp/gh-aw/threat-detection/detection.log
         env:
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
-          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre-activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1) }}
+          COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre-activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre-activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, secrets.COPILOT_GITHUB_TOKEN) }}
           COPILOT_MODEL: ${{ vars.GH_AW_MODEL_DETECTION_COPILOT || '' }}
           GH_AW_PHASE: detection
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt

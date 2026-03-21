@@ -29,7 +29,7 @@ jobs:
 engine:
   id: copilot
   env:
-    COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre-activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre-activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2) }}
+    COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_HELLO_0, needs.pre-activation.outputs.copilot_pat_number == '1', secrets.COPILOT_HELLO_1, needs.pre-activation.outputs.copilot_pat_number == '2', secrets.COPILOT_HELLO_2, secrets.COPILOT_GITHUB_TOKEN) }}
 
 permissions:
   contents: read
