@@ -22,7 +22,7 @@
 #
 # Automated PR reviewer that comments on every changed file and compares the PR description against actual changes
 #
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"67ae53853794348131c9133cad89a5c3d016653516bed4a9a41ad8de883b6c20","compiler_version":"v0.63.1","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"90e9de1f10c1dd8ed7a5cb143c8589f5bf5ea12463fe80197f5acdfdaa47fe30","compiler_version":"v0.63.1","strict":true,"agent_id":"copilot"}
 
 name: "PR File Reviewer"
 "on":
@@ -37,8 +37,16 @@ name: "PR File Reviewer"
   # roles: all # Roles processed as role check in pre-activation job
   # steps: # Steps injected into pre-activation job
   # - env:
+      # PR_NUMBER_EVENT: ${{ github.event.pull_request.number }}
+      # PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}
+    # id: resolve-pr
+    # name: Resolve PR number
+    # run: |
+      # PR_NUMBER="${PR_NUMBER_EVENT:-$PR_NUMBER_INPUT}"
+      # echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+  # - env:
       # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # PR_NUMBER: ${{ github.event.pull_request.number }}
+      # PR_NUMBER: ${{ steps.resolve-pr.outputs.pr_number }}
       # REPO: ${{ github.repository }}
     # name: Add eyeballs reaction to PR
     # run: |
@@ -46,12 +54,23 @@ name: "PR File Reviewer"
   # - if: github.event.action == 'synchronize'
     # name: Delay for synchronize event
     # run: sleep 30
+  workflow_dispatch:
+    inputs:
+      aw_context:
+        default: ""
+        description: Agent caller context (used internally by Agentic Workflows).
+        required: false
+        type: string
+      pr_number:
+        description: Pull request number for post-merge review
+        required: true
+        type: number
 
 permissions: {}
 
 concurrency:
   cancel-in-progress: true
-  group: pr-file-review-${{ github.event.pull_request.number }}
+  group: pr-file-review-${{ github.event.pull_request.number }}${{ github.event.inputs.pr_number }}
 
 run-name: "PR File Reviewer"
 
@@ -142,10 +161,11 @@ jobs:
           GH_AW_GITHUB_ACTOR: ${{ github.actor }}
           GH_AW_GITHUB_EVENT_COMMENT_ID: ${{ github.event.comment.id }}
           GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
+          GH_AW_GITHUB_EVENT_INPUTS_PR_NUMBER: ${{ github.event.inputs.pr_number }}
           GH_AW_GITHUB_EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_AW_GITHUB_EVENT_NAME: ${{ github.event_name }}
           GH_AW_GITHUB_EVENT_PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
-          GH_AW_GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
           GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
           GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
           GH_AW_GITHUB_SERVER_URL: ${{ github.server_url }}
@@ -209,9 +229,10 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
+          GH_AW_GITHUB_EVENT_INPUTS_PR_NUMBER: ${{ github.event.inputs.pr_number }}
           GH_AW_GITHUB_EVENT_PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
-          GH_AW_GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
+          GH_AW_GITHUB_EVENT_NAME: ${{ github.event_name }}
           GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
           GH_AW_GITHUB_SERVER_URL: ${{ github.server_url }}
         with:
@@ -227,10 +248,11 @@ jobs:
           GH_AW_GITHUB_ACTOR: ${{ github.actor }}
           GH_AW_GITHUB_EVENT_COMMENT_ID: ${{ github.event.comment.id }}
           GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
+          GH_AW_GITHUB_EVENT_INPUTS_PR_NUMBER: ${{ github.event.inputs.pr_number }}
           GH_AW_GITHUB_EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_AW_GITHUB_EVENT_NAME: ${{ github.event_name }}
           GH_AW_GITHUB_EVENT_PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
-          GH_AW_GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
           GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
           GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
           GH_AW_GITHUB_SERVER_URL: ${{ github.server_url }}
@@ -250,10 +272,11 @@ jobs:
                 GH_AW_GITHUB_ACTOR: process.env.GH_AW_GITHUB_ACTOR,
                 GH_AW_GITHUB_EVENT_COMMENT_ID: process.env.GH_AW_GITHUB_EVENT_COMMENT_ID,
                 GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER: process.env.GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER,
+                GH_AW_GITHUB_EVENT_INPUTS_PR_NUMBER: process.env.GH_AW_GITHUB_EVENT_INPUTS_PR_NUMBER,
                 GH_AW_GITHUB_EVENT_ISSUE_NUMBER: process.env.GH_AW_GITHUB_EVENT_ISSUE_NUMBER,
+                GH_AW_GITHUB_EVENT_NAME: process.env.GH_AW_GITHUB_EVENT_NAME,
                 GH_AW_GITHUB_EVENT_PULL_REQUEST_HEAD_SHA: process.env.GH_AW_GITHUB_EVENT_PULL_REQUEST_HEAD_SHA,
                 GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER: process.env.GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER,
-                GH_AW_GITHUB_EVENT_PULL_REQUEST_TITLE: process.env.GH_AW_GITHUB_EVENT_PULL_REQUEST_TITLE,
                 GH_AW_GITHUB_REPOSITORY: process.env.GH_AW_GITHUB_REPOSITORY,
                 GH_AW_GITHUB_RUN_ID: process.env.GH_AW_GITHUB_RUN_ID,
                 GH_AW_GITHUB_SERVER_URL: process.env.GH_AW_GITHUB_SERVER_URL,
@@ -1090,17 +1113,26 @@ jobs:
     outputs:
       activated: ${{ 'true' }}
       matched_command: ''
+      resolve-pr_result: ${{ steps.resolve-pr.outcome }}
     steps:
       - name: Setup Scripts
         uses: github/gh-aw-actions/setup@53e09ec0be6271e81a69f51ef93f37212c8834b0 # v0.63.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
+      - name: Resolve PR number
+        id: resolve-pr
+        run: |
+          PR_NUMBER="${PR_NUMBER_EVENT:-$PR_NUMBER_INPUT}"
+          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+        env:
+          PR_NUMBER_EVENT: ${{ github.event.pull_request.number }}
+          PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}
       - name: Add eyeballs reaction to PR
         run: |
           gh api "repos/${REPO}/issues/${PR_NUMBER}/reactions" -f content=eyes 2>/dev/null || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.resolve-pr.outputs.pr_number }}
           REPO: ${{ github.repository }}
       - name: Delay for synchronize event
         if: github.event.action == 'synchronize'
@@ -1126,6 +1158,7 @@ jobs:
           echo "GH_AW_AGENT_OUTPUT=${RUNNER_TEMP}/gh-aw/safe-jobs/agent_output.json" >> "$GITHUB_OUTPUT"
       - name: Remove eyeballs reaction
         run: |
+          PR_NUMBER="${PR_NUMBER_EVENT:-$PR_NUMBER_INPUT}"
           REACTION_ID=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/reactions" \
             --jq '.[] | select(.content == "eyes" and .user.login == "github-actions[bot]") | .id' 2>/dev/null || true)
           if [ -n "$REACTION_ID" ]; then
@@ -1134,7 +1167,8 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-safe-job-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER_EVENT: ${{ github.event.pull_request.number }}
+          PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}
           REPO: ${{ github.repository }}
 
   safe_outputs:
