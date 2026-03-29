@@ -4,14 +4,28 @@ on:
   pull_request_target:
     types: [opened, synchronize]
     forks: ["*"]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number for post-merge review"
+        required: true
+        type: number
   roles: all
   permissions:
     pull-requests: write
   steps:
+    - name: Resolve PR number
+      id: resolve-pr
+      env:
+        PR_NUMBER_EVENT: ${{ github.event.pull_request.number }}
+        PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}
+      run: |
+        PR_NUMBER="${PR_NUMBER_EVENT:-$PR_NUMBER_INPUT}"
+        echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
     - name: Add eyeballs reaction to PR
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_NUMBER: ${{ steps.resolve-pr.outputs.pr_number }}
         REPO: ${{ github.repository }}
       run: |
         gh api "repos/${REPO}/issues/${PR_NUMBER}/reactions" -f content=eyes 2>/dev/null || true
@@ -25,7 +39,7 @@ permissions:
   issues: read
 
 concurrency:
-  group: pr-file-review-${{ github.event.pull_request.number }}
+  group: pr-file-review-${{ github.event.pull_request.number }}${{ github.event.inputs.pr_number }}
   cancel-in-progress: true
 
 checkout:
@@ -61,9 +75,11 @@ safe-outputs:
         - name: Remove eyeballs reaction
           env:
             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            PR_NUMBER: ${{ github.event.pull_request.number }}
+            PR_NUMBER_EVENT: ${{ github.event.pull_request.number }}
+            PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}
             REPO: ${{ github.repository }}
           run: |
+            PR_NUMBER="${PR_NUMBER_EVENT:-$PR_NUMBER_INPUT}"
             REACTION_ID=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/reactions" \
               --jq '.[] | select(.content == "eyes" and .user.login == "github-actions[bot]") | .id' 2>/dev/null || true)
             if [ -n "$REACTION_ID" ]; then
@@ -74,37 +90,49 @@ safe-outputs:
 
 # PR File Reviewer
 
-You are an automated PR review assistant. Your task is to review pull request #${{ github.event.pull_request.number }} ("${{ github.event.pull_request.title }}") in repository `${{ github.repository }}`.
+You are an automated PR review assistant working in repository `${{ github.repository }}`.
 
-## Checkout Reference
+## Trigger Detection
 
-The PR code has been checked out at commit `${{ github.event.pull_request.head.sha }}`. Use this information in every comment and review you produce:
+This workflow was triggered by: **`${{ github.event_name }}`**
 
-- **Repository**: `${{ github.repository }}`
-- **Commit SHA**: `${{ github.event.pull_request.head.sha }}`
-- **Commit URL**: ${{ github.server_url }}/${{ github.repository }}/pull/${{ github.event.pull_request.number }}/commits/${{ github.event.pull_request.head.sha }}
+**If `pull_request_target` (live PR review):**
+- PR Number: **#${{ github.event.pull_request.number }}**
+- Head SHA: `${{ github.event.pull_request.head.sha }}`
+- Commit URL: ${{ github.server_url }}/${{ github.repository }}/pull/${{ github.event.pull_request.number }}/commits/${{ github.event.pull_request.head.sha }}
+- The PR's code has been checked out locally. **Perform ALL steps (1 through 6).**
 
-You will also need the **head branch name** and **head repository name**. Retrieve them by calling the GitHub tool to get pull request #${{ github.event.pull_request.number }} details. Use the head ref and head repository full name from the response.
+**If `workflow_dispatch` (post-merge review):**
+- PR Number: **#${{ github.event.inputs.pr_number }}**
+- The PR's code is NOT checked out locally. You must look up the head SHA and all PR details using GitHub tools.
+- **SKIP Steps 3 and 4** — do not leave review comments or submit a PR review (the PR may be merged/closed).
+- **Perform Steps 1, 2, 5, and 6** — post a summary comment and remove the eyeballs reaction.
+
+Use whichever PR number is non-empty above. Throughout the remaining instructions, "the PR" refers to that number.
 
 ## Your Task
 
 ### Step 1: Get PR Details
 
-Use GitHub tools to fetch the full details of PR #${{ github.event.pull_request.number }} in `${{ github.repository }}`. Extract and remember:
+Use GitHub tools to fetch the full details of the PR in `${{ github.repository }}`. Extract and remember:
 
 - The **PR description** (body text)
 - The **head branch name** (e.g. `feature/my-change`)
 - The **head repository full name** (e.g. `contributor/repo` for forks, or `${{ github.repository }}` for same-repo PRs)
+- The **head SHA** (commit hash of the PR's HEAD)
+- The **PR state** (open, closed, merged)
 
 ### Step 2: Collect Changed Files
 
-Use GitHub tools to get the list of files changed in PR #${{ github.event.pull_request.number }}. For each file, note:
+Use GitHub tools to get the list of files changed in the PR. For each file, note:
 
 - File path
 - Change status (added, modified, removed, renamed)
-- The patch/diff content — you will need this to determine valid line numbers for review comments
+- The patch/diff content — you will need this to determine valid line numbers for review comments (if applicable)
 
 ### Step 3: Leave Review Comments (Max 10 Files)
+
+> ⚠️ **SKIP this step entirely if the trigger is `workflow_dispatch`.** Review comments cannot be reliably applied to merged or closed PRs.
 
 For up to the **first 10** non-deleted files changed in the PR (in the order returned by the API):
 
@@ -124,9 +152,11 @@ For up to the **first 10** non-deleted files changed in the PR (in the order ret
         Reviewed at commit [`<short-sha>`](<commit-url>) on branch `<head-branch>` in [`<head-repo>`](<repo-url>)
         ```
 
-        Where `<short-sha>` is the first 7 characters of `${{ github.event.pull_request.head.sha }}`, `<commit-url>` is the PR commit URL shown above, `<head-branch>` is from Step 1, `<head-repo>` is from Step 1, and `<repo-url>` is `${{ github.server_url }}/<head-repo>`.
+        Where `<short-sha>` is the first 7 characters of the head SHA, `<commit-url>` is `${{ github.server_url }}/<owner>/<repo>/pull/<pr-number>/commits/<full-sha>`, `<head-branch>` is from Step 1, `<head-repo>` is from Step 1, and `<repo-url>` is `${{ github.server_url }}/<head-repo>`.
 
 ### Step 4: Submit the PR Review
+
+> ⚠️ **SKIP this step entirely if the trigger is `workflow_dispatch`.**
 
 After creating all individual file comments, submit a `submit_pull_request_review` with:
 
@@ -159,18 +189,30 @@ List all files where you left review comments, and note any files that were skip
 
 ### Step 5: Post a PR Comment
 
-Use `add_comment` to post a summary comment on PR #${{ github.event.pull_request.number }} with:
+Use `add_comment` to post a summary comment on the PR with:
 
-**1. Checkout Reference:**
+**1. Review Mode:**
+
+State whether this is a **live PR review** (`pull_request_target`) or a **post-merge review** (`workflow_dispatch`).
+
+**2. Checkout Reference:**
 
 > **Reviewed at:**
 > - **Repository**: [`<head-repo>`](<repo-url>)
 > - **Branch**: `<head-branch>`
 > - **Commit**: [`<full-sha>`](<commit-url>)
 
-**2. File Summary Table:**
+Where `<commit-url>` is `${{ github.server_url }}/<owner>/<repo>/pull/<pr-number>/commits/<full-sha>`.
+
+**3. PR Description vs Actual Changes (post-merge review only):**
+
+If this is a **post-merge review** (Steps 3 & 4 were skipped), include the PR description consistency analysis here instead. Compare the PR description against the actual file changes as described in Step 4, Section 2.
+
+**4. File Summary Table:**
 
 List every file changed in the PR with its review status:
+
+**For live PR reviews (`pull_request_target`):**
 
 | File | Status |
 |------|--------|
@@ -179,12 +221,19 @@ List every file changed in the PR with its review status:
 | `path/to/deleted.js` | 🗑️ Deleted — no comment possible |
 | `path/to/eleventh.js` | ⏭️ Skipped — beyond first 10 files |
 
-**3. Totals:**
+**For post-merge reviews (`workflow_dispatch`):**
 
-- Files reviewed with comments: X
-- Files skipped (beyond limit): Y
-- Files deleted: Z
-- Total files changed: X + Y + Z
+| File | Status |
+|------|--------|
+| `path/to/file.js` | 📋 Changed (post-merge review, no inline comment) |
+| `path/to/deleted.js` | 🗑️ Deleted |
+
+**5. Totals:**
+
+- Files changed: X
+- Files with review comments applied: Y (0 for post-merge)
+- Files skipped (beyond limit): Z
+- Files deleted: W
 
 ### Step 6: Remove Eyeballs Reaction
 
