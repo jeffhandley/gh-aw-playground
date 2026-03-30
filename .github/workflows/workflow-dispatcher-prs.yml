@@ -21,8 +21,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  find-prs:
-    name: Find PRs to dispatch
+  poll-prs:
+    name: Poll PRs
     runs-on: ubuntu-latest
     outputs:
       pr-numbers: ${{ steps.build-matrix.outputs.pr-numbers }}
@@ -131,15 +131,15 @@ jobs:
   # ──────────────────────────────────────────────
 
   pr-file-reviewer:
-    name: PR File Reviewer
-    needs: find-prs
-    if: needs.find-prs.outputs.pr-numbers != '[]'
+    name: 'Dispatch: pr-file-reviewer'
+    needs: poll-prs
+    if: needs.poll-prs.outputs.pr-numbers != '[]'
     strategy:
       fail-fast: false
       max-parallel: 5
       matrix:
-        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-numbers) }}
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-include) }}
+        pr_number: ${{ fromJSON(needs.poll-prs.outputs.pr-numbers) }}
+        include: ${{ fromJSON(needs.poll-prs.outputs.pr-include) }}
     uses: ./.github/workflows/pr-file-reviewer.lock.yml
     with:
       pr_number: ${{ matrix.pr_number }}
@@ -148,15 +148,15 @@ jobs:
     secrets: inherit
 
   record-run_pr-file-reviewer:
-    name: Record PR File Review
-    needs: [find-prs, pr-file-reviewer]
-    if: always() && needs.pr-file-reviewer.result != 'failure' && needs.find-prs.outputs.pr-numbers != '[]'
+    name: 'Record: pr-file-reviewer'
+    needs: [poll-prs, pr-file-reviewer]
+    if: always() && needs.pr-file-reviewer.result != 'failure' && needs.poll-prs.outputs.pr-numbers != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-numbers) }}
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-include) }}
+        pr_number: ${{ fromJSON(needs.poll-prs.outputs.pr-numbers) }}
+        include: ${{ fromJSON(needs.poll-prs.outputs.pr-include) }}
     steps:
       - name: Save completion marker
         run: |
@@ -181,7 +181,7 @@ jobs:
 
   # ──────────────────────────────────────────────
   # Add additional PR workflow sections here.
-  # Pattern: workflow job → record-run_<workflow-name> job
+  # Pattern: dispatch job → record job
   # ──────────────────────────────────────────────
 
   # ──────────────────────────────────────────────
@@ -189,15 +189,15 @@ jobs:
   # ──────────────────────────────────────────────
 
   pr-labeler:
-    name: PR Labeler
-    needs: find-prs
-    if: needs.find-prs.outputs.pr-numbers != '[]'
+    name: 'Dispatch: pr-labeler'
+    needs: poll-prs
+    if: needs.poll-prs.outputs.pr-numbers != '[]'
     strategy:
       fail-fast: false
       max-parallel: 5
       matrix:
-        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-numbers) }}
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-include) }}
+        pr_number: ${{ fromJSON(needs.poll-prs.outputs.pr-numbers) }}
+        include: ${{ fromJSON(needs.poll-prs.outputs.pr-include) }}
     uses: ./.github/workflows/pr-labeler.lock.yml
     with:
       pr_number: ${{ matrix.pr_number }}
@@ -206,15 +206,15 @@ jobs:
     secrets: inherit
 
   record-run_pr-labeler:
-    name: Record PR Labeling
-    needs: [find-prs, pr-labeler]
-    if: always() && needs.pr-labeler.result != 'failure' && needs.find-prs.outputs.pr-numbers != '[]'
+    name: 'Record: pr-labeler'
+    needs: [poll-prs, pr-labeler]
+    if: always() && needs.pr-labeler.result != 'failure' && needs.poll-prs.outputs.pr-numbers != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-numbers) }}
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-include) }}
+        pr_number: ${{ fromJSON(needs.poll-prs.outputs.pr-numbers) }}
+        include: ${{ fromJSON(needs.poll-prs.outputs.pr-include) }}
     steps:
       - name: Save completion marker
         run: |
@@ -238,17 +238,17 @@ jobs:
           done
 
   # ──────────────────────────────────────────────
-  # Dispatcher bookkeeping
+  # Conclusion
   # ──────────────────────────────────────────────
 
-  record-successful-run:
-    name: Record successful run timestamp
+  conclusion:
+    name: Conclusion
     runs-on: ubuntu-latest
-    needs: [find-prs, pr-file-reviewer, record-run_pr-file-reviewer, pr-labeler, record-run_pr-labeler]
+    needs: [poll-prs, pr-file-reviewer, record-run_pr-file-reviewer, pr-labeler, record-run_pr-labeler]
     # Add additional workflow jobs to the needs list as they are added
     if: >-
       always()
-      && needs.find-prs.result == 'success'
+      && needs.poll-prs.result == 'success'
       && needs.pr-file-reviewer.result != 'failure'
       && needs.pr-labeler.result != 'failure'
     steps:
@@ -276,3 +276,43 @@ jobs:
               gh api -X DELETE "repos/${REPO}/actions/caches?key=${KEY}" 2>/dev/null || true
             fi
           done
+
+      - name: Summary
+        run: |
+          PR_NUMBERS='${{ needs.poll-prs.outputs.pr-numbers }}'
+          PR_COUNT=$(echo "$PR_NUMBERS" | jq 'length')
+
+          FILE_REVIEWER='${{ needs.pr-file-reviewer.result }}'
+          LABELER='${{ needs.pr-labeler.result }}'
+          RECORD_FILE_REVIEWER='${{ needs.record-run_pr-file-reviewer.result }}'
+          RECORD_LABELER='${{ needs.record-run_pr-labeler.result }}'
+
+          # Map result to emoji
+          icon() {
+            case "$1" in
+              success)   echo "✅" ;;
+              skipped)   echo "⏭️" ;;
+              cancelled) echo "⚠️" ;;
+              failure)   echo "❌" ;;
+              *)         echo "❔" ;;
+            esac
+          }
+
+          {
+            echo "## PR Workflow Dispatcher"
+            echo ""
+
+            if [ "$PR_COUNT" -eq "0" ]; then
+              echo "No PRs required dispatching."
+            else
+              echo "Dispatched **${PR_COUNT}** PR(s): $(echo "$PR_NUMBERS" | jq -r '[.[] | "#\(.)"] | join(", ")')"
+              echo ""
+              echo "| Workflow | Dispatch | Record |"
+              echo "| --- | --- | --- |"
+              echo "| pr-file-reviewer | $(icon "$FILE_REVIEWER") $FILE_REVIEWER | $(icon "$RECORD_FILE_REVIEWER") $RECORD_FILE_REVIEWER |"
+              echo "| pr-labeler | $(icon "$LABELER") $LABELER | $(icon "$RECORD_LABELER") $RECORD_LABELER |"
+            fi
+
+            echo ""
+            echo "Timestamp recorded: \`${{ github.run_started_at }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
