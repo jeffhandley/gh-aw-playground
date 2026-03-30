@@ -33,16 +33,16 @@ on:
       name: Select Copilot token from pool
       uses: ./.github/actions/select-copilot-pat
       env:
-        COPILOT_PAT_0: ${{ secrets.COPILOT_PR_0 }}
-        COPILOT_PAT_1: ${{ secrets.COPILOT_PR_1 }}
-        COPILOT_PAT_2: ${{ secrets.COPILOT_PR_2 }}
-        COPILOT_PAT_3: ${{ secrets.COPILOT_PR_3 }}
-        COPILOT_PAT_4: ${{ secrets.COPILOT_PR_4 }}
-        COPILOT_PAT_5: ${{ secrets.COPILOT_PR_5 }}
-        COPILOT_PAT_6: ${{ secrets.COPILOT_PR_6 }}
-        COPILOT_PAT_7: ${{ secrets.COPILOT_PR_7 }}
-        COPILOT_PAT_8: ${{ secrets.COPILOT_PR_8 }}
-        COPILOT_PAT_9: ${{ secrets.COPILOT_PR_9 }}
+        COPILOT_PAT_0: ${{ secrets.COPILOT_PAT_0 }}
+        COPILOT_PAT_1: ${{ secrets.COPILOT_PAT_1 }}
+        COPILOT_PAT_2: ${{ secrets.COPILOT_PAT_2 }}
+        COPILOT_PAT_3: ${{ secrets.COPILOT_PAT_3 }}
+        COPILOT_PAT_4: ${{ secrets.COPILOT_PAT_4 }}
+        COPILOT_PAT_5: ${{ secrets.COPILOT_PAT_5 }}
+        COPILOT_PAT_6: ${{ secrets.COPILOT_PAT_6 }}
+        COPILOT_PAT_7: ${{ secrets.COPILOT_PAT_7 }}
+        COPILOT_PAT_8: ${{ secrets.COPILOT_PAT_8 }}
+        COPILOT_PAT_9: ${{ secrets.COPILOT_PAT_9 }}
 
     - name: Get PR details
       id: pr_check
@@ -108,7 +108,7 @@ engine:
   env:
     # We cannot use line breaks in this expression as it leads to a syntax error in the compiled workflow
     # If none of the `COPILOT_PAT_#` secrets were selected, then the default COPILOT_GITHUB_TOKEN is used
-    COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_PR_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_PR_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_PR_2, needs.pre_activation.outputs.copilot_pat_number == '3', secrets.COPILOT_PR_3, needs.pre_activation.outputs.copilot_pat_number == '4', secrets.COPILOT_PR_4, needs.pre_activation.outputs.copilot_pat_number == '5', secrets.COPILOT_PR_5, needs.pre_activation.outputs.copilot_pat_number == '6', secrets.COPILOT_PR_6, needs.pre_activation.outputs.copilot_pat_number == '7', secrets.COPILOT_PR_7, needs.pre_activation.outputs.copilot_pat_number == '8', secrets.COPILOT_PR_8, needs.pre_activation.outputs.copilot_pat_number == '9', secrets.COPILOT_PR_9, secrets.COPILOT_GITHUB_TOKEN) }}
+    COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_PAT_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_PAT_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_PAT_2, needs.pre_activation.outputs.copilot_pat_number == '3', secrets.COPILOT_PAT_3, needs.pre_activation.outputs.copilot_pat_number == '4', secrets.COPILOT_PAT_4, needs.pre_activation.outputs.copilot_pat_number == '5', secrets.COPILOT_PAT_5, needs.pre_activation.outputs.copilot_pat_number == '6', secrets.COPILOT_PAT_6, needs.pre_activation.outputs.copilot_pat_number == '7', secrets.COPILOT_PAT_7, needs.pre_activation.outputs.copilot_pat_number == '8', secrets.COPILOT_PAT_8, needs.pre_activation.outputs.copilot_pat_number == '9', secrets.COPILOT_PAT_9, secrets.COPILOT_GITHUB_TOKEN) }}
 
 ---
 
