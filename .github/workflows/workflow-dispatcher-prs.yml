@@ -92,6 +92,7 @@ jobs:
           MATRIX="[]"
           DISPATCHED=""
           SKIPPED=""
+          SKIP_COUNT=0
 
           echo ""
           for ROW in $(echo "$PRS" | jq -c '.[]'); do
@@ -124,11 +125,12 @@ jobs:
 
             if [ "$ALL_CACHED" = "true" ]; then
               echo "PR #${PR_NUMBER} — all workflows completed (event ${LAST_EVENT_ID})"
-              SKIPPED="${SKIPPED}\n| ${PR_LABEL} | ${STATE} | ${LAST_EVENT_ID} |"
+              SKIPPED="${SKIPPED}| ${PR_LABEL} | ${STATE} | ${LAST_EVENT_ID} |\n"
+              SKIP_COUNT=$((SKIP_COUNT + 1))
             else
               echo "PR #${PR_NUMBER} — dispatching (event ${LAST_EVENT_ID})"
               MATRIX=$(echo "$MATRIX" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\", \"last_event_id\": \"$LAST_EVENT_ID\"}]")
-              DISPATCHED="${DISPATCHED}\n| ${PR_LABEL} | ${STATE} | ${LAST_EVENT_ID} |"
+              DISPATCHED="${DISPATCHED}| ${PR_LABEL} | ${STATE} | ${LAST_EVENT_ID} |\n"
             fi
           done
 
@@ -150,16 +152,16 @@ jobs:
               echo ""
               echo "| PR | State | Event ID |"
               echo "| --- | --- | --- |"
-              echo -e "$DISPATCHED"
+              printf "%b" "$DISPATCHED"
             fi
 
             if [ -n "$SKIPPED" ]; then
               echo ""
-              echo "<details><summary>Already completed ($(echo -e "$SKIPPED" | grep -c '|'))</summary>"
+              echo "<details><summary>Already completed (${SKIP_COUNT})</summary>"
               echo ""
               echo "| PR | State | Event ID |"
               echo "| --- | --- | --- |"
-              echo -e "$SKIPPED"
+              printf "%b" "$SKIPPED"
               echo ""
               echo "</details>"
             fi
