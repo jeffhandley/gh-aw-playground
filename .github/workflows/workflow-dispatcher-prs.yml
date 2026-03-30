@@ -25,7 +25,8 @@ jobs:
     name: Find PRs to dispatch
     runs-on: ubuntu-latest
     outputs:
-      pr-file-reviewer-matrix: ${{ steps.build-matrix.outputs.pr-file-reviewer-matrix }}
+      pr-file-reviewer-numbers: ${{ steps.build-matrix.outputs.pr-file-reviewer-numbers }}
+      pr-file-reviewer-include: ${{ steps.build-matrix.outputs.pr-file-reviewer-include }}
       # Add additional workflow matrix outputs here
     steps:
       - name: Restore last-successful-run timestamp
@@ -110,7 +111,8 @@ jobs:
           done
 
           echo "pr-file-reviewer matrix: $PR_FILE_REVIEWER"
-          echo "pr-file-reviewer-matrix=$PR_FILE_REVIEWER" >> "$GITHUB_OUTPUT"
+          echo "pr-file-reviewer-numbers=$(echo "$PR_FILE_REVIEWER" | jq -c '[.[].pr_number]')" >> "$GITHUB_OUTPUT"
+          echo "pr-file-reviewer-include=$PR_FILE_REVIEWER" >> "$GITHUB_OUTPUT"
 
           #
           # Add additional workflow matrix building here.
@@ -122,13 +124,15 @@ jobs:
   # ──────────────────────────────────────────────
 
   pr-file-reviewer:
-    name: "PR File Reviewer (#${{ matrix.pr_number }})"
+    name: PR File Reviewer
     needs: find-prs
+    if: needs.find-prs.outputs.pr-file-reviewer-numbers != '[]'
     strategy:
       fail-fast: false
       max-parallel: 5
       matrix:
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-matrix) }}
+        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-numbers) }}
+        include: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-include) }}
     uses: ./.github/workflows/pr-file-reviewer.lock.yml
     with:
       pr_number: ${{ matrix.pr_number }}
@@ -136,14 +140,15 @@ jobs:
     secrets: inherit
 
   record-run_pr-file-reviewer:
-    name: "Record PR File Review (#${{ matrix.pr_number }})"
+    name: Record PR File Review
     needs: [find-prs, pr-file-reviewer]
     if: always() && needs.pr-file-reviewer.result == 'success'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-matrix) }}
+        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-numbers) }}
+        include: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-include) }}
     steps:
       - name: Save completion marker
         run: |
