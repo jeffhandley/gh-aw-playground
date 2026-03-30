@@ -59,37 +59,29 @@ jobs:
           echo "since=$SINCE" >> "$GITHUB_OUTPUT"
           echo "Using lookback timestamp: $SINCE"
 
-      - name: Find PRs updated since last successful run
-        id: find-prs
+      - name: Find PRs and build dispatch matrices
+        id: build-matrix
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SINCE: ${{ steps.since.outputs.since }}
+          REPO: ${{ github.repository }}
         run: |
           # Fetch all PRs (open and closed) updated since the last successful run,
           # including head SHA for cache-based skip checks.
           PRS=$(gh pr list \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --state all \
             --json number,isDraft,state,updatedAt,headRefOid \
             --limit 100 \
             --jq "[.[] | select(.updatedAt >= \"$SINCE\")]")
 
-          echo "PRs updated since $SINCE:"
           PR_COUNT=$(echo "$PRS" | jq 'length')
+          echo "PRs updated since $SINCE:"
+
           if [ "$PR_COUNT" -eq "0" ]; then
             echo "  (none)"
-          else
-            echo "$PRS" | jq -r '.[] | "  PR #\(.number) (\(.state)\(if .isDraft then ", draft" else "" end)) @ \(.headRefOid[:7])"'
           fi
-          echo "prs=$PRS" >> "$GITHUB_OUTPUT"
 
-      - name: Build workflow dispatch matrices
-        id: build-matrix
-        env:
-          PRS: ${{ steps.find-prs.outputs.prs }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
           #
           # pr-file-reviewer: applies to non-draft PRs (open or closed)
           #
@@ -98,18 +90,29 @@ jobs:
           PR_FILE_REVIEWER="[]"
           for ROW in $(echo "$CANDIDATES" | jq -c '.[]'); do
             PR_NUMBER=$(echo "$ROW" | jq -r '.number')
+            PR_STATE=$(echo "$ROW" | jq -r '.state')
             HEAD_SHA=$(echo "$ROW" | jq -r '.headRefOid')
             CACHE_KEY="pr-file-reviewer-${PR_NUMBER}-${HEAD_SHA}"
             CACHE_EXISTS=$(gh api "repos/${REPO}/actions/caches?key=${CACHE_KEY}" --jq '.total_count')
 
             if [ "$CACHE_EXISTS" -gt "0" ]; then
-              echo "  pr-file-reviewer: PR #${PR_NUMBER} already reviewed at ${HEAD_SHA:0:7} — skipping"
+              echo "  PR #${PR_NUMBER} (${PR_STATE}) @ ${HEAD_SHA:0:7} — already reviewed"
             else
-              echo "  pr-file-reviewer: PR #${PR_NUMBER} needs review at ${HEAD_SHA:0:7}"
+              echo "  PR #${PR_NUMBER} (${PR_STATE}) @ ${HEAD_SHA:0:7} — needs review"
               PR_FILE_REVIEWER=$(echo "$PR_FILE_REVIEWER" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\"}]")
             fi
           done
 
+          # Log draft PRs that were skipped
+          DRAFTS=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == true)]')
+          for ROW in $(echo "$DRAFTS" | jq -c '.[]'); do
+            PR_NUMBER=$(echo "$ROW" | jq -r '.number')
+            PR_STATE=$(echo "$ROW" | jq -r '.state')
+            HEAD_SHA=$(echo "$ROW" | jq -r '.headRefOid')
+            echo "  PR #${PR_NUMBER} (${PR_STATE}, draft) @ ${HEAD_SHA:0:7} — skipped (draft)"
+          done
+
+          echo ""
           echo "pr-file-reviewer matrix: $PR_FILE_REVIEWER"
           echo "pr-file-reviewer-numbers=$(echo "$PR_FILE_REVIEWER" | jq -c '[.[].pr_number]')" >> "$GITHUB_OUTPUT"
           echo "pr-file-reviewer-include=$PR_FILE_REVIEWER" >> "$GITHUB_OUTPUT"
@@ -124,7 +127,7 @@ jobs:
   # ──────────────────────────────────────────────
 
   pr-file-reviewer:
-    name: PR File Reviewer
+    name: "PR File Reviewer (#${{ matrix.pr_number }})"
     needs: find-prs
     if: needs.find-prs.outputs.pr-file-reviewer-numbers != '[]'
     strategy:
@@ -140,7 +143,7 @@ jobs:
     secrets: inherit
 
   record-run_pr-file-reviewer:
-    name: Record PR File Review
+    name: "Record PR File Review (#${{ matrix.pr_number }})"
     needs: [find-prs, pr-file-reviewer]
     if: always() && needs.pr-file-reviewer.result == 'success'
     runs-on: ubuntu-latest
