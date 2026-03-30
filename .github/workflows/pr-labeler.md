@@ -85,6 +85,10 @@ tools:
 safe-outputs:
   add-labels:
     max: 3
+    allowed:
+      - bug
+      - enhancement
+      - documentation
   noop:
 
 jobs:
