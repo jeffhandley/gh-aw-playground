@@ -90,16 +90,25 @@ jobs:
           # ensuring the PR gets re-dispatched when anything changes.
           WORKFLOWS="pr-file-reviewer pr-labeler"
           MATRIX="[]"
+          DISPATCHED=""
+          SKIPPED=""
 
           echo ""
           for ROW in $(echo "$PRS" | jq -c '.[]'); do
             PR_NUMBER=$(echo "$ROW" | jq -r '.number')
             HEAD_SHA=$(echo "$ROW" | jq -r '.headRefOid')
+            STATE=$(echo "$ROW" | jq -r '.state')
+            IS_DRAFT=$(echo "$ROW" | jq -r '.isDraft')
 
             # Get the latest event ID for this PR as a change cursor
             LAST_EVENT_ID=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/events" --jq 'last | .id // empty')
             if [ -z "$LAST_EVENT_ID" ]; then
               LAST_EVENT_ID="none"
+            fi
+
+            PR_LABEL="#${PR_NUMBER}"
+            if [ "$IS_DRAFT" = "true" ]; then
+              PR_LABEL="${PR_LABEL} (draft)"
             fi
 
             # Check if ALL workflows have already processed this PR at this event
@@ -115,9 +124,11 @@ jobs:
 
             if [ "$ALL_CACHED" = "true" ]; then
               echo "PR #${PR_NUMBER} — all workflows completed (event ${LAST_EVENT_ID})"
+              SKIPPED="${SKIPPED}\n| ${PR_LABEL} | ${STATE} | ${LAST_EVENT_ID} |"
             else
               echo "PR #${PR_NUMBER} — dispatching (event ${LAST_EVENT_ID})"
               MATRIX=$(echo "$MATRIX" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\", \"last_event_id\": \"$LAST_EVENT_ID\"}]")
+              DISPATCHED="${DISPATCHED}\n| ${PR_LABEL} | ${STATE} | ${LAST_EVENT_ID} |"
             fi
           done
 
@@ -125,6 +136,38 @@ jobs:
           echo "Dispatch matrix: $MATRIX"
           echo "pr-numbers=$(echo "$MATRIX" | jq -c '[.[].pr_number]')" >> "$GITHUB_OUTPUT"
           echo "pr-include=$MATRIX" >> "$GITHUB_OUTPUT"
+
+          # Step summary
+          DISPATCH_COUNT=$(echo "$MATRIX" | jq 'length')
+          {
+            echo "## PR Workflow Dispatcher"
+            echo ""
+            echo "Lookback: \`${SINCE}\` · Workflows: \`${WORKFLOWS}\`"
+            echo ""
+
+            if [ -n "$DISPATCHED" ]; then
+              echo "### Dispatching (${DISPATCH_COUNT})"
+              echo ""
+              echo "| PR | State | Event ID |"
+              echo "| --- | --- | --- |"
+              echo -e "$DISPATCHED"
+            fi
+
+            if [ -n "$SKIPPED" ]; then
+              echo ""
+              echo "<details><summary>Already completed ($(echo -e "$SKIPPED" | grep -c '|'))</summary>"
+              echo ""
+              echo "| PR | State | Event ID |"
+              echo "| --- | --- | --- |"
+              echo -e "$SKIPPED"
+              echo ""
+              echo "</details>"
+            fi
+
+            if [ -z "$DISPATCHED" ] && [ -z "$SKIPPED" ]; then
+              echo "No PRs updated since \`${SINCE}\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ──────────────────────────────────────────────
   # PR File Reviewer
@@ -276,43 +319,3 @@ jobs:
               gh api -X DELETE "repos/${REPO}/actions/caches?key=${KEY}" 2>/dev/null || true
             fi
           done
-
-      - name: Summary
-        run: |
-          PR_NUMBERS='${{ needs.poll-prs.outputs.pr-numbers }}'
-          PR_COUNT=$(echo "$PR_NUMBERS" | jq 'length')
-
-          FILE_REVIEWER='${{ needs.pr-file-reviewer.result }}'
-          LABELER='${{ needs.pr-labeler.result }}'
-          RECORD_FILE_REVIEWER='${{ needs.record-run_pr-file-reviewer.result }}'
-          RECORD_LABELER='${{ needs.record-run_pr-labeler.result }}'
-
-          # Map result to emoji
-          icon() {
-            case "$1" in
-              success)   echo "✅" ;;
-              skipped)   echo "⏭️" ;;
-              cancelled) echo "⚠️" ;;
-              failure)   echo "❌" ;;
-              *)         echo "❔" ;;
-            esac
-          }
-
-          {
-            echo "## PR Workflow Dispatcher"
-            echo ""
-
-            if [ "$PR_COUNT" -eq "0" ]; then
-              echo "No PRs required dispatching."
-            else
-              echo "Dispatched **${PR_COUNT}** PR(s): $(echo "$PR_NUMBERS" | jq -r '[.[] | "#\(.)"] | join(", ")')"
-              echo ""
-              echo "| Workflow | Dispatch | Record |"
-              echo "| --- | --- | --- |"
-              echo "| pr-file-reviewer | $(icon "$FILE_REVIEWER") $FILE_REVIEWER | $(icon "$RECORD_FILE_REVIEWER") $RECORD_FILE_REVIEWER |"
-              echo "| pr-labeler | $(icon "$LABELER") $LABELER | $(icon "$RECORD_LABELER") $RECORD_LABELER |"
-            fi
-
-            echo ""
-            echo "Timestamp recorded: \`${{ github.run_started_at }}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
