@@ -180,7 +180,7 @@ jobs:
   record-run_pr-file-reviewer:
     name: Record PR File Review
     needs: [find-prs, pr-file-reviewer]
-    if: always() && needs.pr-file-reviewer.result == 'success'
+    if: always() && needs.pr-file-reviewer.result != 'failure'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -238,7 +238,7 @@ jobs:
   record-run_pr-labeler:
     name: Record PR Labeling
     needs: [find-prs, pr-labeler]
-    if: always() && needs.pr-labeler.result == 'success'
+    if: always() && needs.pr-labeler.result != 'failure'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -279,8 +279,8 @@ jobs:
     if: >-
       always()
       && needs.find-prs.result == 'success'
-      && (needs.pr-file-reviewer.result == 'success' || needs.pr-file-reviewer.result == 'skipped')
-      && (needs.pr-labeler.result == 'success' || needs.pr-labeler.result == 'skipped')
+      && needs.pr-file-reviewer.result != 'failure'
+      && needs.pr-labeler.result != 'failure'
     steps:
       - name: Write last-successful-run timestamp
         env:
