@@ -11,6 +11,10 @@ on:
         description: "Head SHA to review (fetched from PR by default)"
         required: false
         type: string
+      artifact_id:
+        description: "Unique identifier to prevent artifact name collisions when multiple workflows run in the same parent workflow"
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       pr_number:
