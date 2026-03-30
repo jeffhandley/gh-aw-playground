@@ -22,7 +22,7 @@
 #
 # Automated PR reviewer that comments on every changed file and compares the PR description against actual changes
 #
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"12ec45d1ca54671d726de3d655bfc46ecb34c2e9d67380a7b31b50785c6bb41f","compiler_version":"v0.64.3","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"2f8b8e088beea0610abd5b1f03d8d43407edf8e592b5081c49e8dd64d0e8e05e","compiler_version":"v0.64.3","strict":true,"agent_id":"copilot"}
 
 name: "PR File Reviewer"
 "on":
@@ -177,14 +177,14 @@ jobs:
         run: |
           bash ${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh
           {
-          cat << 'GH_AW_PROMPT_f95744d73a25f54e_EOF'
+          cat << 'GH_AW_PROMPT_04d7a84b01b3c8a7_EOF'
           <system>
-          GH_AW_PROMPT_f95744d73a25f54e_EOF
+          GH_AW_PROMPT_04d7a84b01b3c8a7_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_f95744d73a25f54e_EOF'
+          cat << 'GH_AW_PROMPT_04d7a84b01b3c8a7_EOF'
           <safe-output-tools>
           Tools: add_comment, create_pull_request_review_comment(max:10), submit_pull_request_review, missing_tool, missing_data, noop
           </safe-output-tools>
@@ -216,14 +216,14 @@ jobs:
           {{/if}}
           </github-context>
           
-          GH_AW_PROMPT_f95744d73a25f54e_EOF
+          GH_AW_PROMPT_04d7a84b01b3c8a7_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_f95744d73a25f54e_EOF'
+          cat << 'GH_AW_PROMPT_04d7a84b01b3c8a7_EOF'
           </system>
-          GH_AW_PROMPT_f95744d73a25f54e_EOF
-          cat << 'GH_AW_PROMPT_f95744d73a25f54e_EOF'
+          GH_AW_PROMPT_04d7a84b01b3c8a7_EOF
+          cat << 'GH_AW_PROMPT_04d7a84b01b3c8a7_EOF'
           {{#runtime-import .github/workflows/pr-file-reviewer.md}}
-          GH_AW_PROMPT_f95744d73a25f54e_EOF
+          GH_AW_PROMPT_04d7a84b01b3c8a7_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
@@ -402,12 +402,12 @@ jobs:
           mkdir -p ${RUNNER_TEMP}/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
-          cat > ${RUNNER_TEMP}/gh-aw/safeoutputs/config.json << 'GH_AW_SAFE_OUTPUTS_CONFIG_b511cbb72616f621_EOF'
+          cat > ${RUNNER_TEMP}/gh-aw/safeoutputs/config.json << 'GH_AW_SAFE_OUTPUTS_CONFIG_7b5864ea507f888d_EOF'
           {"add_comment":{"max":1},"create_pull_request_review_comment":{"max":10,"side":"RIGHT"},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"submit_pull_request_review":{"max":1}}
-          GH_AW_SAFE_OUTPUTS_CONFIG_b511cbb72616f621_EOF
+          GH_AW_SAFE_OUTPUTS_CONFIG_7b5864ea507f888d_EOF
       - name: Write Safe Outputs Tools
         run: |
-          cat > ${RUNNER_TEMP}/gh-aw/safeoutputs/tools_meta.json << 'GH_AW_SAFE_OUTPUTS_TOOLS_META_840dea13d23248e4_EOF'
+          cat > ${RUNNER_TEMP}/gh-aw/safeoutputs/tools_meta.json << 'GH_AW_SAFE_OUTPUTS_TOOLS_META_20037c5f073439bb_EOF'
           {
             "description_suffixes": {
               "add_comment": " CONSTRAINTS: Maximum 1 comment(s) can be added.",
@@ -417,8 +417,8 @@ jobs:
             "repo_params": {},
             "dynamic_tools": []
           }
-          GH_AW_SAFE_OUTPUTS_TOOLS_META_840dea13d23248e4_EOF
-          cat > ${RUNNER_TEMP}/gh-aw/safeoutputs/validation.json << 'GH_AW_SAFE_OUTPUTS_VALIDATION_650b2d7b66380ba2_EOF'
+          GH_AW_SAFE_OUTPUTS_TOOLS_META_20037c5f073439bb_EOF
+          cat > ${RUNNER_TEMP}/gh-aw/safeoutputs/validation.json << 'GH_AW_SAFE_OUTPUTS_VALIDATION_dd5ac47d7bba2ed7_EOF'
           {
             "add_comment": {
               "defaultMax": 1,
@@ -551,7 +551,7 @@ jobs:
               }
             }
           }
-          GH_AW_SAFE_OUTPUTS_VALIDATION_650b2d7b66380ba2_EOF
+          GH_AW_SAFE_OUTPUTS_VALIDATION_dd5ac47d7bba2ed7_EOF
           node ${RUNNER_TEMP}/gh-aw/actions/generate_safe_outputs_tools.cjs
       - name: Generate Safe Outputs MCP Server Config
         id: safe-outputs-config
@@ -619,7 +619,7 @@ jobs:
           export MCP_GATEWAY_DOCKER_COMMAND='docker run -i --rm --network host -v /var/run/docker.sock:/var/run/docker.sock -e MCP_GATEWAY_PORT -e MCP_GATEWAY_DOMAIN -e MCP_GATEWAY_API_KEY -e MCP_GATEWAY_PAYLOAD_DIR -e MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD -e DEBUG -e MCP_GATEWAY_LOG_DIR -e GH_AW_MCP_LOG_DIR -e GH_AW_SAFE_OUTPUTS -e GH_AW_SAFE_OUTPUTS_CONFIG_PATH -e GH_AW_SAFE_OUTPUTS_TOOLS_PATH -e GH_AW_ASSETS_BRANCH -e GH_AW_ASSETS_MAX_SIZE_KB -e GH_AW_ASSETS_ALLOWED_EXTS -e DEFAULT_BRANCH -e GITHUB_MCP_SERVER_TOKEN -e GITHUB_MCP_GUARD_MIN_INTEGRITY -e GITHUB_MCP_GUARD_REPOS -e GITHUB_REPOSITORY -e GITHUB_SERVER_URL -e GITHUB_SHA -e GITHUB_WORKSPACE -e GITHUB_TOKEN -e GITHUB_RUN_ID -e GITHUB_RUN_NUMBER -e GITHUB_RUN_ATTEMPT -e GITHUB_JOB -e GITHUB_ACTION -e GITHUB_EVENT_NAME -e GITHUB_EVENT_PATH -e GITHUB_ACTOR -e GITHUB_ACTOR_ID -e GITHUB_TRIGGERING_ACTOR -e GITHUB_WORKFLOW -e GITHUB_WORKFLOW_REF -e GITHUB_WORKFLOW_SHA -e GITHUB_REF -e GITHUB_REF_NAME -e GITHUB_REF_TYPE -e GITHUB_HEAD_REF -e GITHUB_BASE_REF -e GH_AW_SAFE_OUTPUTS_PORT -e GH_AW_SAFE_OUTPUTS_API_KEY -v /tmp/gh-aw/mcp-payloads:/tmp/gh-aw/mcp-payloads:rw -v /opt:/opt:ro -v /tmp:/tmp:rw -v '"${GITHUB_WORKSPACE}"':'"${GITHUB_WORKSPACE}"':rw ghcr.io/github/gh-aw-mcpg:v0.2.8'
           
           mkdir -p /home/runner/.copilot
-          cat << GH_AW_MCP_CONFIG_6b2c06bbd6444b60_EOF | bash ${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.sh
+          cat << GH_AW_MCP_CONFIG_d6745cd459a0d7fb_EOF | bash ${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.sh
           {
             "mcpServers": {
               "github": {
@@ -660,7 +660,7 @@ jobs:
               "payloadDir": "${MCP_GATEWAY_PAYLOAD_DIR}"
             }
           }
-          GH_AW_MCP_CONFIG_6b2c06bbd6444b60_EOF
+          GH_AW_MCP_CONFIG_d6745cd459a0d7fb_EOF
       - name: Download activation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1131,6 +1131,9 @@ jobs:
       - name: Get PR details and check if review is needed
         id: pr_check
         run: |
+          # This workflow's lock file name (used to detect direct dispatch vs. workflow_call)
+          THIS_WORKFLOW="pr-file-reviewer.lock.yml"
+
           # Fetch PR metadata
           PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json number,headRefOid,headRefName,headRepository,state)
           HEAD_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
@@ -1141,9 +1144,9 @@ jobs:
           echo "head_repo=$(echo "$PR_JSON" | jq -r '.headRepository.owner.login + "/" + .headRepository.name')" >> "$GITHUB_OUTPUT"
           echo "pr_state=$(echo "$PR_JSON" | jq -r '.state')" >> "$GITHUB_OUTPUT"
 
-          # For workflow_dispatch, always proceed
-          if [ "$EVENT_NAME" != "workflow_call" ]; then
-            echo "Review needed (manual dispatch)"
+          # When directly dispatched, always proceed
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$WORKFLOW_REF" == *"/${THIS_WORKFLOW}@"* ]]; then
+            echo "Review needed (direct dispatch)"
             exit 0
           fi
 
@@ -1162,6 +1165,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ inputs.pr_number }}
           REPO: ${{ github.repository }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
 
   safe_outputs:
     needs:

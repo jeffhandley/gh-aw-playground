@@ -22,8 +22,12 @@ on:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         PR_NUMBER: ${{ inputs.pr_number }}
         EVENT_NAME: ${{ github.event_name }}
+        WORKFLOW_REF: ${{ github.workflow_ref }}
         REPO: ${{ github.repository }}
       run: |
+        # This workflow's lock file name (used to detect direct dispatch vs. workflow_call)
+        THIS_WORKFLOW="pr-file-reviewer.lock.yml"
+
         # Fetch PR metadata
         PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json number,headRefOid,headRefName,headRepository,state)
         HEAD_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
@@ -34,9 +38,9 @@ on:
         echo "head_repo=$(echo "$PR_JSON" | jq -r '.headRepository.owner.login + "/" + .headRepository.name')" >> "$GITHUB_OUTPUT"
         echo "pr_state=$(echo "$PR_JSON" | jq -r '.state')" >> "$GITHUB_OUTPUT"
 
-        # For workflow_dispatch, always proceed
-        if [ "$EVENT_NAME" != "workflow_call" ]; then
-          echo "Review needed (manual dispatch)"
+        # When directly dispatched, always proceed
+        if [[ "$EVENT_NAME" == "workflow_dispatch" && "$WORKFLOW_REF" == *"/${THIS_WORKFLOW}@"* ]]; then
+          echo "Review needed (direct dispatch)"
           exit 0
         fi
 
