@@ -180,7 +180,7 @@ jobs:
   record-run_pr-file-reviewer:
     name: Record PR File Review
     needs: [find-prs, pr-file-reviewer]
-    if: always() && needs.pr-file-reviewer.result != 'failure'
+    if: always() && needs.pr-file-reviewer.result != 'failure' && needs.find-prs.outputs.pr-file-reviewer-numbers != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -238,7 +238,7 @@ jobs:
   record-run_pr-labeler:
     name: Record PR Labeling
     needs: [find-prs, pr-labeler]
-    if: always() && needs.pr-labeler.result != 'failure'
+    if: always() && needs.pr-labeler.result != 'failure' && needs.find-prs.outputs.pr-labeler-numbers != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
