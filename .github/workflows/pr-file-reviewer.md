@@ -13,6 +13,43 @@ on:
         description: "Pull request number to review"
         required: true
         type: number
+  permissions:
+    pull-requests: read
+  steps:
+    - name: Get PR details and check if review is needed
+      id: pr_check
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PR_NUMBER: ${{ inputs.pr_number }}
+        EVENT_NAME: ${{ github.event_name }}
+        REPO: ${{ github.repository }}
+      run: |
+        # Fetch PR metadata
+        PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json number,headRefOid,headRefName,headRepository,state)
+        HEAD_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
+        echo "pr_number=$(echo "$PR_JSON" | jq -r '.number')" >> "$GITHUB_OUTPUT"
+        echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+        echo "head_short_sha=${HEAD_SHA:0:7}" >> "$GITHUB_OUTPUT"
+        echo "head_branch=$(echo "$PR_JSON" | jq -r '.headRefName')" >> "$GITHUB_OUTPUT"
+        echo "head_repo=$(echo "$PR_JSON" | jq -r '.headRepository.owner.login + "/" + .headRepository.name')" >> "$GITHUB_OUTPUT"
+        echo "pr_state=$(echo "$PR_JSON" | jq -r '.state')" >> "$GITHUB_OUTPUT"
+
+        # For workflow_dispatch, always proceed
+        if [ "$EVENT_NAME" != "workflow_call" ]; then
+          echo "Review needed (manual dispatch)"
+          exit 0
+        fi
+
+        # Check for existing review at this commit
+        EXISTING=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+          --jq "[.[] | select(.user.login == \"${{ github.actor }}\" and (.body | contains(\"${HEAD_SHA}\")))] | length")
+
+        if [ "$EXISTING" -gt "0" ]; then
+          echo "Already reviewed at $HEAD_SHA — skipping"
+          exit 1
+        fi
+
+        echo "Not yet reviewed at $HEAD_SHA — proceeding"
 
 permissions:
   contents: read
@@ -38,40 +75,43 @@ safe-outputs:
     discussions: false
     issues: false
 
+jobs:
+  pre-activation:
+    outputs:
+      pr_number: ${{ steps.pr_check.outputs.pr_number }}
+      head_sha: ${{ steps.pr_check.outputs.head_sha }}
+      head_short_sha: ${{ steps.pr_check.outputs.head_short_sha }}
+      head_branch: ${{ steps.pr_check.outputs.head_branch }}
+      head_repo: ${{ steps.pr_check.outputs.head_repo }}
+      pr_state: ${{ steps.pr_check.outputs.pr_state }}
+
+if: needs.pre_activation.outputs.pr_check_result == 'success'
+
 ---
 
 # PR File Reviewer
 
 You are an automated PR review assistant working in repository `${{ github.repository }}`.
 
-This workflow was dispatched to review **PR #${{ inputs.pr_number }}** in `${{ github.repository }}`.
+## PR Context
 
-## Step 0: Check if Review is Needed
+The following PR details were gathered during pre-activation:
 
-This workflow was triggered via **`${{ github.event_name }}`**.
+- **PR Number**: #${{ needs.pre_activation.outputs.pr_number }}
+- **Head SHA**: `${{ needs.pre_activation.outputs.head_sha }}`
+- **Short SHA**: `${{ needs.pre_activation.outputs.head_short_sha }}`
+- **Head Branch**: `${{ needs.pre_activation.outputs.head_branch }}`
+- **Head Repository**: `${{ needs.pre_activation.outputs.head_repo }}`
+- **PR State**: `${{ needs.pre_activation.outputs.pr_state }}`
+- **Server URL**: `${{ github.server_url }}`
 
-If the trigger is **`workflow_call`** (not `workflow_dispatch`), perform this check before doing any review work:
+## Step 1: Get PR Description
 
-1. Fetch the PR details for PR #${{ inputs.pr_number }} to get the **current head SHA**.
-2. Fetch the most recent comments on the PR (using `get_comments`).
-3. Look for an existing comment from this workflow that contains the text `**Commit**:` followed by a commit link containing the **current head SHA**.
-4. If such a comment exists, the PR has already been reviewed at this commit. **Stop immediately** — do not proceed to any further steps, do not post any comments, and do not submit any reviews. Simply end the workflow.
-
-If the trigger is **`workflow_dispatch`**, skip this check and always proceed with the review.
-
-## Step 1: Get PR Details
-
-Use GitHub tools to fetch the full details of PR #${{ inputs.pr_number }} in `${{ github.repository }}`. Extract and remember:
-
-- The **PR description** (body text)
-- The **head branch name** (e.g. `feature/my-change`)
-- The **head repository full name** (e.g. `contributor/repo` for forks, or `${{ github.repository }}` for same-repo PRs)
-- The **head SHA** (commit hash of the PR's HEAD)
-- The **PR state** (open, closed, merged)
+Use GitHub tools to fetch the PR description (body text) for PR #${{ needs.pre_activation.outputs.pr_number }} in `${{ github.repository }}`. You will need this for comparing against actual changes later.
 
 ## Step 2: Collect Changed Files
 
-Use GitHub tools to get the list of files changed in the PR. For each file, note:
+Use GitHub tools to get the list of files changed in PR #${{ needs.pre_activation.outputs.pr_number }}. For each file, note:
 
 - File path
 - Change status (added, modified, removed, renamed)
@@ -96,13 +136,13 @@ For up to the **first 10** non-deleted files changed in the PR (in the order ret
         ```
 
         Where:
-        - `<short-sha>` = first 7 characters of the head SHA
-        - `<commit-url>` = `${{ github.server_url }}/<owner>/<repo>/pull/${{ inputs.pr_number }}/commits/<full-sha>`
-        - `<head-branch>` = from Step 1
-        - `<head-repo>` = from Step 1
-        - `<repo-url>` = `${{ github.server_url }}/<head-repo>`
+        - `<short-sha>` = the **Short SHA** from the PR Context
+        - `<commit-url>` = `<server-url>/<owner>/<repo>/pull/<pr-number>/commits/<head-sha>` using values from the PR Context
+        - `<head-branch>` = the **Head Branch** from the PR Context
+        - `<head-repo>` = the **Head Repository** from the PR Context
+        - `<repo-url>` = `<server-url>/<head-repo>`
 
-> ⚠️ If the PR is **closed or merged**, skip this step entirely — review comments cannot be reliably applied to closed PRs.
+> ⚠️ If the PR State is **CLOSED** or **MERGED**, skip this step entirely — review comments cannot be reliably applied to closed PRs.
 
 ## Step 4: Submit the PR Review
 
@@ -116,7 +156,7 @@ After creating all individual file comments, submit a `submit_pull_request_revie
 > **Review conducted at:**
 > - **Repository**: [`<head-repo>`](<repo-url>)
 > - **Branch**: `<head-branch>`
-> - **Commit**: [`<full-sha>`](<commit-url>)
+> - **Commit**: [`<head-sha>`](<commit-url>)
 
 **Section 2 — PR Description vs Actual Changes:**
 
@@ -135,7 +175,7 @@ List all files where you left review comments, and note any files that were skip
 - Files beyond the first 10 (skipped due to limit)
 - Deleted files (skipped because they have no lines to comment on)
 
-> ⚠️ If the PR is **closed or merged**, skip this step entirely.
+> ⚠️ If the PR State is **CLOSED** or **MERGED**, skip this step entirely.
 
 ## Step 5: Post a PR Comment
 
@@ -146,14 +186,11 @@ Use `add_comment` to post a summary comment on the PR with:
 > **Reviewed at:**
 > - **Repository**: [`<head-repo>`](<repo-url>)
 > - **Branch**: `<head-branch>`
-> - **Commit**: [`<full-sha>`](<commit-url>)
-
-Where `<commit-url>` is:
-`${{ github.server_url }}/<owner>/<repo>/pull/${{ inputs.pr_number }}/commits/<full-sha>`
+> - **Commit**: [`<head-sha>`](<commit-url>)
 
 **2. PR Description vs Actual Changes (closed/merged PRs only):**
 
-If the PR is **closed or merged** (Steps 3 & 4 were skipped), include the PR description consistency analysis here instead. Compare the PR description against the actual file changes as described in Step 4, Section 2.
+If the PR State is **CLOSED** or **MERGED** (Steps 3 & 4 were skipped), include the PR description consistency analysis here instead. Compare the PR description against the actual file changes as described in Step 4, Section 2.
 
 **3. File Summary Table:**
 
