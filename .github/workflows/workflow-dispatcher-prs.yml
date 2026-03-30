@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       since:
-        description: 'ISO 8601 timestamp — find PRs updated at or after this time (default: since last successful run)'
+        description: 'ISO 8601 timestamp — find PRs updated at or after this time (default: time of last successful run)'
         required: false
         type: string
 
