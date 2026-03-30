@@ -25,10 +25,8 @@ jobs:
     name: Find PRs to dispatch
     runs-on: ubuntu-latest
     outputs:
-      pr-file-reviewer-numbers: ${{ steps.build-matrix.outputs.pr-file-reviewer-numbers }}
-      pr-file-reviewer-include: ${{ steps.build-matrix.outputs.pr-file-reviewer-include }}
-      pr-labeler-numbers: ${{ steps.build-matrix.outputs.pr-labeler-numbers }}
-      pr-labeler-include: ${{ steps.build-matrix.outputs.pr-labeler-include }}
+      pr-numbers: ${{ steps.build-matrix.outputs.pr-numbers }}
+      pr-include: ${{ steps.build-matrix.outputs.pr-include }}
     steps:
       - name: Restore last-successful-run timestamp
         uses: actions/cache/restore@v4
@@ -85,77 +83,40 @@ jobs:
             echo "$PRS" | jq -r '.[] | "  PR #\(.number) (\(.state)\(if .isDraft then ", draft" else "" end)) @ \(.headRefOid[:7])"'
           fi
 
-          #
-          # pr-file-reviewer: non-draft PRs (open or closed)
-          #
-          echo ""
-          echo "pr-file-reviewer:"
-          CANDIDATES=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == false)]')
+          # Build a unified matrix of all updated PRs.
+          # Each workflow is responsible for its own eligibility filtering.
+          # The dispatcher only checks per-workflow cache markers to avoid re-dispatching.
+          WORKFLOWS="pr-file-reviewer pr-labeler"
+          MATRIX="[]"
 
-          PR_FILE_REVIEWER="[]"
-          for ROW in $(echo "$CANDIDATES" | jq -c '.[]'); do
+          echo ""
+          for ROW in $(echo "$PRS" | jq -c '.[]'); do
             PR_NUMBER=$(echo "$ROW" | jq -r '.number')
             HEAD_SHA=$(echo "$ROW" | jq -r '.headRefOid')
-            CACHE_KEY="pr-file-reviewer-${PR_NUMBER}-${HEAD_SHA}"
-            CACHE_EXISTS=$(gh api "repos/${REPO}/actions/caches?key=${CACHE_KEY}" --jq '.total_count')
 
-            if [ "$CACHE_EXISTS" -gt "0" ]; then
-              echo "  PR #${PR_NUMBER} — already reviewed at ${HEAD_SHA:0:7}"
+            # Check if ALL workflows have already processed this PR at this SHA
+            ALL_CACHED=true
+            for WF in $WORKFLOWS; do
+              CACHE_KEY="${WF}-${PR_NUMBER}-${HEAD_SHA}"
+              CACHE_EXISTS=$(gh api "repos/${REPO}/actions/caches?key=${CACHE_KEY}" --jq '.total_count')
+              if [ "$CACHE_EXISTS" -eq "0" ]; then
+                ALL_CACHED=false
+                break
+              fi
+            done
+
+            if [ "$ALL_CACHED" = "true" ]; then
+              echo "PR #${PR_NUMBER} — all workflows completed at ${HEAD_SHA:0:7}"
             else
-              echo "  PR #${PR_NUMBER} — needs review at ${HEAD_SHA:0:7}"
-              PR_FILE_REVIEWER=$(echo "$PR_FILE_REVIEWER" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\"}]")
+              echo "PR #${PR_NUMBER} — dispatching at ${HEAD_SHA:0:7}"
+              MATRIX=$(echo "$MATRIX" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\"}]")
             fi
           done
 
-          DRAFT_COUNT=$(echo "$PRS" | jq '[.[] | select(.isDraft == true)] | length')
-          if [ "$DRAFT_COUNT" -gt "0" ]; then
-            echo "$PRS" | jq -r '.[] | select(.isDraft == true) | "  PR #\(.number) — skipped (draft)"'
-          fi
-
-          if [ "$PR_COUNT" -gt "0" ] && [ "$(echo "$CANDIDATES" | jq 'length')" -eq "0" ] && [ "$DRAFT_COUNT" -eq "0" ]; then
-            echo "  (no eligible PRs)"
-          fi
-
           echo ""
-          echo "pr-file-reviewer matrix: $PR_FILE_REVIEWER"
-          echo "pr-file-reviewer-numbers=$(echo "$PR_FILE_REVIEWER" | jq -c '[.[].pr_number]')" >> "$GITHUB_OUTPUT"
-          echo "pr-file-reviewer-include=$PR_FILE_REVIEWER" >> "$GITHUB_OUTPUT"
-
-          #
-          # pr-labeler: non-draft PRs (open or closed)
-          #
-          echo ""
-          echo "pr-labeler:"
-          LABELER_CANDIDATES=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == false)]')
-
-          PR_LABELER="[]"
-          for ROW in $(echo "$LABELER_CANDIDATES" | jq -c '.[]'); do
-            PR_NUMBER=$(echo "$ROW" | jq -r '.number')
-            HEAD_SHA=$(echo "$ROW" | jq -r '.headRefOid')
-            CACHE_KEY="pr-labeler-${PR_NUMBER}-${HEAD_SHA}"
-            CACHE_EXISTS=$(gh api "repos/${REPO}/actions/caches?key=${CACHE_KEY}" --jq '.total_count')
-
-            if [ "$CACHE_EXISTS" -gt "0" ]; then
-              echo "  PR #${PR_NUMBER} — already labeled at ${HEAD_SHA:0:7}"
-            else
-              echo "  PR #${PR_NUMBER} — needs labeling at ${HEAD_SHA:0:7}"
-              PR_LABELER=$(echo "$PR_LABELER" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\"}]")
-            fi
-          done
-
-          DRAFT_COUNT=$(echo "$PRS" | jq '[.[] | select(.isDraft == true)] | length')
-          if [ "$DRAFT_COUNT" -gt "0" ]; then
-            echo "$PRS" | jq -r '.[] | select(.isDraft == true) | "  PR #\(.number) — skipped (draft)"'
-          fi
-
-          if [ "$PR_COUNT" -gt "0" ] && [ "$(echo "$LABELER_CANDIDATES" | jq 'length')" -eq "0" ]; then
-            echo "  (no eligible PRs)"
-          fi
-
-          echo ""
-          echo "pr-labeler matrix: $PR_LABELER"
-          echo "pr-labeler-numbers=$(echo "$PR_LABELER" | jq -c '[.[].pr_number]')" >> "$GITHUB_OUTPUT"
-          echo "pr-labeler-include=$PR_LABELER" >> "$GITHUB_OUTPUT"
+          echo "Dispatch matrix: $MATRIX"
+          echo "pr-numbers=$(echo "$MATRIX" | jq -c '[.[].pr_number]')" >> "$GITHUB_OUTPUT"
+          echo "pr-include=$MATRIX" >> "$GITHUB_OUTPUT"
 
   # ──────────────────────────────────────────────
   # PR File Reviewer
@@ -164,13 +125,13 @@ jobs:
   pr-file-reviewer:
     name: PR File Reviewer
     needs: find-prs
-    if: needs.find-prs.outputs.pr-file-reviewer-numbers != '[]'
+    if: needs.find-prs.outputs.pr-numbers != '[]'
     strategy:
       fail-fast: false
       max-parallel: 5
       matrix:
-        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-numbers) }}
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-include) }}
+        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-numbers) }}
+        include: ${{ fromJSON(needs.find-prs.outputs.pr-include) }}
     uses: ./.github/workflows/pr-file-reviewer.lock.yml
     with:
       pr_number: ${{ matrix.pr_number }}
@@ -181,13 +142,13 @@ jobs:
   record-run_pr-file-reviewer:
     name: Record PR File Review
     needs: [find-prs, pr-file-reviewer]
-    if: always() && needs.pr-file-reviewer.result != 'failure' && needs.find-prs.outputs.pr-file-reviewer-numbers != '[]'
+    if: always() && needs.pr-file-reviewer.result != 'failure' && needs.find-prs.outputs.pr-numbers != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-numbers) }}
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-include) }}
+        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-numbers) }}
+        include: ${{ fromJSON(needs.find-prs.outputs.pr-include) }}
     steps:
       - name: Save completion marker
         run: |
@@ -222,13 +183,13 @@ jobs:
   pr-labeler:
     name: PR Labeler
     needs: find-prs
-    if: needs.find-prs.outputs.pr-labeler-numbers != '[]'
+    if: needs.find-prs.outputs.pr-numbers != '[]'
     strategy:
       fail-fast: false
       max-parallel: 5
       matrix:
-        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-labeler-numbers) }}
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-labeler-include) }}
+        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-numbers) }}
+        include: ${{ fromJSON(needs.find-prs.outputs.pr-include) }}
     uses: ./.github/workflows/pr-labeler.lock.yml
     with:
       pr_number: ${{ matrix.pr_number }}
@@ -239,13 +200,13 @@ jobs:
   record-run_pr-labeler:
     name: Record PR Labeling
     needs: [find-prs, pr-labeler]
-    if: always() && needs.pr-labeler.result != 'failure' && needs.find-prs.outputs.pr-labeler-numbers != '[]'
+    if: always() && needs.pr-labeler.result != 'failure' && needs.find-prs.outputs.pr-numbers != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-labeler-numbers) }}
-        include: ${{ fromJSON(needs.find-prs.outputs.pr-labeler-include) }}
+        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-numbers) }}
+        include: ${{ fromJSON(needs.find-prs.outputs.pr-include) }}
     steps:
       - name: Save completion marker
         run: |

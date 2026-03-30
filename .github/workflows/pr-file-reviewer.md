@@ -33,6 +33,19 @@ on:
         sparse-checkout-cone-mode: true
         fetch-depth: 1
 
+    - id: eligible
+      name: Check PR eligibility
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PR_NUMBER: ${{ inputs.pr_number }}
+        REPO: ${{ github.repository }}
+      run: |
+        IS_DRAFT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json isDraft --jq '.isDraft')
+        if [ "$IS_DRAFT" = "true" ]; then
+          echo "::notice::PR #${PR_NUMBER} is a draft — skipping file review"
+          exit 1
+        fi
+
     - id: select-copilot-pat
       name: Select Copilot token from pool
       uses: ./.github/actions/select-copilot-pat
@@ -80,6 +93,8 @@ permissions:
 concurrency:
   group: pr-file-review-${{ inputs.pr_number }}
   cancel-in-progress: true
+
+if: needs.pre_activation.outputs.eligible_result == 'success'
 
 tools:
   github:
