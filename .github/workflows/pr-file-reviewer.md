@@ -46,6 +46,19 @@ You are an automated PR review assistant working in repository `${{ github.repos
 
 This workflow was dispatched to review **PR #${{ inputs.pr_number }}** in `${{ github.repository }}`.
 
+## Step 0: Check if Review is Needed
+
+This workflow was triggered via **`${{ github.event_name }}`**.
+
+If the trigger is **`workflow_call`** (not `workflow_dispatch`), perform this check before doing any review work:
+
+1. Fetch the PR details for PR #${{ inputs.pr_number }} to get the **current head SHA**.
+2. Fetch the most recent comments on the PR (using `get_comments`).
+3. Look for an existing comment from this workflow that contains the text `**Commit**:` followed by a commit link containing the **current head SHA**.
+4. If such a comment exists, the PR has already been reviewed at this commit. **Stop immediately** — do not proceed to any further steps, do not post any comments, and do not submit any reviews. Simply end the workflow.
+
+If the trigger is **`workflow_dispatch`**, skip this check and always proceed with the review.
+
 ## Step 1: Get PR Details
 
 Use GitHub tools to fetch the full details of PR #${{ inputs.pr_number }} in `${{ github.repository }}`. Extract and remember:

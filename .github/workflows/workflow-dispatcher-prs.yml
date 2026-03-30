@@ -103,7 +103,7 @@ jobs:
     name: Record successful run timestamp
     runs-on: ubuntu-latest
     needs: [find-prs, pr-file-reviewer]
-    if: always() && needs.find-prs.result == 'success' && (needs.pr-file-reviewer.result == 'success' || needs.pr-file-reviewer.result == 'skipped')
+    if: always() && needs.find-prs.result == 'success' && needs.pr-file-reviewer.result == 'success'
     steps:
       - name: Write last-successful-run timestamp
         env:
