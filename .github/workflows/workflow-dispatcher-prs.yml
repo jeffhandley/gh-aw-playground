@@ -28,9 +28,9 @@ jobs:
       - name: Restore last-successful-run timestamp
         uses: actions/cache/restore@v4
         with:
-          path: /tmp/pr-workflow-dispatcher
-          key: pr-workflow-dispatcher-timestamp-${{ github.run_id }}
-          restore-keys: pr-workflow-dispatcher-timestamp
+          path: /tmp/workflow-dispatcher-prs
+          key: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
+          restore-keys: workflow-dispatcher-prs-timestamp
 
       - name: Determine lookback timestamp
         id: since
@@ -39,8 +39,8 @@ jobs:
         run: |
           MANUAL_SINCE="${{ github.event.inputs.since }}"
           CACHED_SINCE=""
-          if [ -f /tmp/pr-workflow-dispatcher/last-successful-run ]; then
-            CACHED_SINCE=$(cat /tmp/pr-workflow-dispatcher/last-successful-run)
+          if [ -f /tmp/workflow-dispatcher-prs/last-successful-run ]; then
+            CACHED_SINCE=$(cat /tmp/workflow-dispatcher-prs/last-successful-run)
           fi
 
           if [ -n "$MANUAL_SINCE" ]; then
@@ -108,11 +108,11 @@ jobs:
         env:
           WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
         run: |
-          mkdir -p /tmp/pr-workflow-dispatcher
-          echo "$WORKFLOW_STARTED_AT" > /tmp/pr-workflow-dispatcher/last-successful-run
+          mkdir -p /tmp/workflow-dispatcher-prs
+          echo "$WORKFLOW_STARTED_AT" > /tmp/workflow-dispatcher-prs/last-successful-run
 
       - name: Save last-successful-run timestamp
         uses: actions/cache/save@v4
         with:
-          path: /tmp/pr-workflow-dispatcher
-          key: pr-workflow-dispatcher-timestamp-${{ github.run_id }}
+          path: /tmp/workflow-dispatcher-prs
+          key: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
