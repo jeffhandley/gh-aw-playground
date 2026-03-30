@@ -20,6 +20,29 @@ on:
   permissions:
     pull-requests: read
   steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      name: Checkout the select-copilot-pat action folder
+      with:
+        persist-credentials: false
+        sparse-checkout: .github/actions/select-copilot-pat
+        sparse-checkout-cone-mode: true
+        fetch-depth: 1
+
+    - id: select-copilot-pat
+      name: Select Copilot token from pool
+      uses: ./.github/actions/select-copilot-pat
+      env:
+        COPILOT_PAT_0: ${{ secrets.COPILOT_PR_0 }}
+        COPILOT_PAT_1: ${{ secrets.COPILOT_PR_1 }}
+        COPILOT_PAT_2: ${{ secrets.COPILOT_PR_2 }}
+        COPILOT_PAT_3: ${{ secrets.COPILOT_PR_3 }}
+        COPILOT_PAT_4: ${{ secrets.COPILOT_PR_4 }}
+        COPILOT_PAT_5: ${{ secrets.COPILOT_PR_5 }}
+        COPILOT_PAT_6: ${{ secrets.COPILOT_PR_6 }}
+        COPILOT_PAT_7: ${{ secrets.COPILOT_PR_7 }}
+        COPILOT_PAT_8: ${{ secrets.COPILOT_PR_8 }}
+        COPILOT_PAT_9: ${{ secrets.COPILOT_PR_9 }}
+
     - name: Get PR details
       id: pr_check
       env:
@@ -71,12 +94,20 @@ safe-outputs:
 jobs:
   pre-activation:
     outputs:
+      copilot_pat_number: ${{ steps.select-copilot-pat.outputs.copilot_pat_number }}
       pr_number: ${{ steps.pr_check.outputs.pr_number }}
       head_sha: ${{ steps.pr_check.outputs.head_sha }}
       head_short_sha: ${{ steps.pr_check.outputs.head_short_sha }}
       head_branch: ${{ steps.pr_check.outputs.head_branch }}
       head_repo: ${{ steps.pr_check.outputs.head_repo }}
       pr_state: ${{ steps.pr_check.outputs.pr_state }}
+
+engine:
+  id: copilot
+  env:
+    # We cannot use line breaks in this expression as it leads to a syntax error in the compiled workflow
+    # If none of the `COPILOT_PAT_#` secrets were selected, then the default COPILOT_GITHUB_TOKEN is used
+    COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_PR_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_PR_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_PR_2, needs.pre_activation.outputs.copilot_pat_number == '3', secrets.COPILOT_PR_3, needs.pre_activation.outputs.copilot_pat_number == '4', secrets.COPILOT_PR_4, needs.pre_activation.outputs.copilot_pat_number == '5', secrets.COPILOT_PR_5, needs.pre_activation.outputs.copilot_pat_number == '6', secrets.COPILOT_PR_6, needs.pre_activation.outputs.copilot_pat_number == '7', secrets.COPILOT_PR_7, needs.pre_activation.outputs.copilot_pat_number == '8', secrets.COPILOT_PR_8, needs.pre_activation.outputs.copilot_pat_number == '9', secrets.COPILOT_PR_9, secrets.COPILOT_GITHUB_TOKEN) }}
 
 ---
 
