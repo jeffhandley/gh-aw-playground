@@ -74,7 +74,12 @@ jobs:
             --jq "[.[] | select(.updatedAt >= \"$SINCE\")]")
 
           echo "PRs updated since $SINCE:"
-          echo "$PRS" | jq -r '.[] | "  PR #\(.number) (\(.state)\(if .isDraft then ", draft" else "" end)) @ \(.headRefOid[:7])"'
+          PR_COUNT=$(echo "$PRS" | jq 'length')
+          if [ "$PR_COUNT" -eq "0" ]; then
+            echo "  (none)"
+          else
+            echo "$PRS" | jq -r '.[] | "  PR #\(.number) (\(.state)\(if .isDraft then ", draft" else "" end)) @ \(.headRefOid[:7])"'
+          fi
           echo "prs=$PRS" >> "$GITHUB_OUTPUT"
 
       - name: Build workflow dispatch matrices
@@ -117,7 +122,7 @@ jobs:
   # ──────────────────────────────────────────────
 
   pr-file-reviewer:
-    name: "PR File Reviewer - PR #${{ matrix.pr_number }}"
+    name: PR File Reviewer
     needs: find-prs
     if: needs.find-prs.outputs.pr-file-reviewer-matrix != '[]'
     strategy:
@@ -132,7 +137,7 @@ jobs:
     secrets: inherit
 
   record-run_pr-file-reviewer:
-    name: "Record PR File Review - PR #${{ matrix.pr_number }}"
+    name: Record PR File Review
     needs: [find-prs, pr-file-reviewer]
     if: always() && needs.pr-file-reviewer.result == 'success'
     runs-on: ubuntu-latest
