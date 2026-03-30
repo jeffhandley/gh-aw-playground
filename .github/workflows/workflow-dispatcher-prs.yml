@@ -14,7 +14,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: write
-  actions: read
+  actions: write
 
 concurrency:
   group: ${{ github.workflow }}
@@ -33,8 +33,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: /tmp/workflow-dispatcher-prs
-          key: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
-          restore-keys: workflow-dispatcher-prs-timestamp
+          key: workflow-dispatcher-prs-timestamp-
+          restore-keys: workflow-dispatcher-prs-timestamp-
 
       - name: Determine lookback timestamp
         id: since
@@ -154,11 +154,22 @@ jobs:
         run: |
           echo "Recording successful run for PR #${{ matrix.pr_number }} at ${{ matrix.head_sha }}"
           mkdir -p /tmp/workflow-run-marker
-          echo "reviewed" > /tmp/workflow-run-marker/done
+          echo "${{ matrix.head_sha }}" > /tmp/workflow-run-marker/head_sha
       - uses: actions/cache/save@v4
         with:
           path: /tmp/workflow-run-marker
           key: pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.head_sha }}
+      - name: Clean up old markers for this PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          CURRENT_KEY="pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.head_sha }}"
+          gh api "repos/${REPO}/actions/caches?key=pr-file-reviewer-${{ matrix.pr_number }}-" --jq '.actions_caches[].key' | while read -r KEY; do
+            if [ "$KEY" != "$CURRENT_KEY" ]; then
+              gh api -X DELETE "repos/${REPO}/actions/caches?key=${KEY}" 2>/dev/null || true
+            fi
+          done
 
   # ──────────────────────────────────────────────
   # Add additional PR workflow sections here.
@@ -188,3 +199,15 @@ jobs:
         with:
           path: /tmp/workflow-dispatcher-prs
           key: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
+
+      - name: Clean up old timestamp cache entries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          CURRENT_KEY: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
+        run: |
+          gh api "repos/${REPO}/actions/caches?key=workflow-dispatcher-prs-timestamp-" --jq '.actions_caches[].key' | while read -r KEY; do
+            if [ "$KEY" != "$CURRENT_KEY" ]; then
+              gh api -X DELETE "repos/${REPO}/actions/caches?key=${KEY}" 2>/dev/null || true
+            fi
+          done
