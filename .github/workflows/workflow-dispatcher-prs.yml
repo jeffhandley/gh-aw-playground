@@ -29,7 +29,7 @@ jobs:
       pr-include: ${{ steps.build-matrix.outputs.pr-include }}
     steps:
       - name: Restore last-successful-run timestamp
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: /tmp/workflow-dispatcher-prs
           key: workflow-dispatcher-prs-timestamp-
@@ -217,7 +217,7 @@ jobs:
           echo "Recording successful run for PR #${{ matrix.pr_number }} (event ${{ matrix.last_event_id }})"
           mkdir -p /tmp/workflow-run-marker
           echo "${{ matrix.last_event_id }}" > /tmp/workflow-run-marker/last_event_id
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v5
         with:
           path: /tmp/workflow-run-marker
           key: pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.last_event_id }}
@@ -275,7 +275,7 @@ jobs:
           echo "Recording successful run for PR #${{ matrix.pr_number }} (event ${{ matrix.last_event_id }})"
           mkdir -p /tmp/workflow-run-marker
           echo "${{ matrix.last_event_id }}" > /tmp/workflow-run-marker/last_event_id
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v5
         with:
           path: /tmp/workflow-run-marker
           key: pr-labeler-${{ matrix.pr_number }}-${{ matrix.last_event_id }}
@@ -314,7 +314,7 @@ jobs:
           echo "$WORKFLOW_STARTED_AT" > /tmp/workflow-dispatcher-prs/last-successful-run
 
       - name: Save last-successful-run timestamp
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: /tmp/workflow-dispatcher-prs
           key: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
