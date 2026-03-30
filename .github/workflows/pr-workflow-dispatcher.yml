@@ -1,4 +1,4 @@
-name: PR Review Orchestrator
+name: PR Workflow Dispatcher
 
 on:
   schedule:
@@ -6,40 +6,41 @@ on:
   workflow_dispatch:
     inputs:
       since:
-        description: 'ISO 8601 timestamp — find PRs updated at or after this time (default: since last scheduled run)'
+        description: 'ISO 8601 timestamp — find PRs updated at or after this time (default: since last successful run)'
         required: false
         type: string
 
 permissions:
   contents: read
-  pull-requests: write
-  actions: read
+  pull-requests: read
 
 concurrency:
-  group: pr-review-orchestrator
-  cancel-in-progress: true
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   find-prs:
-    name: Find PRs to review
+    name: Find PRs to dispatch
     runs-on: ubuntu-latest
     outputs:
       pr-file-reviewer-matrix: ${{ steps.build-matrix.outputs.pr-file-reviewer-matrix }}
     steps:
-      - name: Cache last-run timestamp
-        uses: actions/cache@v4
+      - name: Restore last-successful-run timestamp
+        uses: actions/cache/restore@v4
         with:
-          path: /tmp/orchestrator
-          key: pr-review-orchestrator-timestamp-${{ github.run_id }}
-          restore-keys: pr-review-orchestrator-timestamp-
+          path: /tmp/pr-workflow-dispatcher
+          key: pr-workflow-dispatcher-timestamp-${{ github.run_id }}
+          restore-keys: pr-workflow-dispatcher-timestamp
 
       - name: Determine lookback timestamp
         id: since
+        env:
+          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
         run: |
           MANUAL_SINCE="${{ github.event.inputs.since }}"
           CACHED_SINCE=""
-          if [ -f /tmp/orchestrator/last-run ]; then
-            CACHED_SINCE=$(cat /tmp/orchestrator/last-run)
+          if [ -f /tmp/pr-workflow-dispatcher/last-successful-run ]; then
+            CACHED_SINCE=$(cat /tmp/pr-workflow-dispatcher/last-successful-run)
           fi
 
           if [ -n "$MANUAL_SINCE" ]; then
@@ -54,17 +55,13 @@ jobs:
           echo "since=$SINCE" >> "$GITHUB_OUTPUT"
           echo "Using lookback timestamp: $SINCE"
 
-          # Record current time for next run
-          mkdir -p /tmp/orchestrator
-          date -u '+%Y-%m-%dT%H:%M:%SZ' > /tmp/orchestrator/last-run
-
-      - name: Find PRs updated since last run
+      - name: Find PRs updated since last successful run
         id: find-prs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SINCE: ${{ steps.since.outputs.since }}
         run: |
-          # Fetch all PRs (open and closed) updated since the lookback timestamp.
+          # Fetch all PRs (open and closed) updated since the last successful run.
           # The pr-file-reviewer workflow can handle closed PRs too.
           PRS=$(gh pr list \
             --repo "${{ github.repository }}" \
@@ -100,3 +97,22 @@ jobs:
     with:
       pr_number: ${{ matrix.pr_number }}
     secrets: inherit
+
+  record-successful-run:
+    name: Record successful run timestamp
+    runs-on: ubuntu-latest
+    needs: [find-prs, pr-file-reviewer]
+    if: always() && needs.find-prs.result == 'success' && (needs.pr-file-reviewer.result == 'success' || needs.pr-file-reviewer.result == 'skipped')
+    steps:
+      - name: Write last-successful-run timestamp
+        env:
+          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
+        run: |
+          mkdir -p /tmp/pr-workflow-dispatcher
+          echo "$WORKFLOW_STARTED_AT" > /tmp/pr-workflow-dispatcher/last-successful-run
+
+      - name: Save last-successful-run timestamp
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/pr-workflow-dispatcher
+          key: pr-workflow-dispatcher-timestamp-${{ github.run_id }}
