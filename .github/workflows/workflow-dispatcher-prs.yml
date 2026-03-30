@@ -127,7 +127,7 @@ jobs:
   # ──────────────────────────────────────────────
 
   pr-file-reviewer:
-    name: "PR File Reviewer (#${{ matrix.pr_number }})"
+    name: PR File Reviewer
     needs: find-prs
     if: needs.find-prs.outputs.pr-file-reviewer-numbers != '[]'
     strategy:
@@ -143,7 +143,7 @@ jobs:
     secrets: inherit
 
   record-run_pr-file-reviewer:
-    name: "Record PR File Review (#${{ matrix.pr_number }})"
+    name: Record PR File Review
     needs: [find-prs, pr-file-reviewer]
     if: always() && needs.pr-file-reviewer.result == 'success'
     runs-on: ubuntu-latest
