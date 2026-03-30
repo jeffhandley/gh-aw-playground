@@ -7,6 +7,10 @@ on:
         description: "Pull request number to review"
         required: true
         type: number
+      head_sha:
+        description: "Head SHA to review (fetched from PR by default)"
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       pr_number:
@@ -16,44 +20,29 @@ on:
   permissions:
     pull-requests: read
   steps:
-    - name: Get PR details and check if review is needed
+    - name: Get PR details
       id: pr_check
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         PR_NUMBER: ${{ inputs.pr_number }}
-        EVENT_NAME: ${{ github.event_name }}
-        WORKFLOW_REF: ${{ github.workflow_ref }}
+        INPUT_HEAD_SHA: ${{ inputs.head_sha }}
         REPO: ${{ github.repository }}
       run: |
-        # This workflow's lock file name (used to detect direct dispatch vs. workflow_call)
-        THIS_WORKFLOW="pr-file-reviewer.lock.yml"
-
         # Fetch PR metadata
         PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json number,headRefOid,headRefName,headRepository,state)
-        HEAD_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
         echo "pr_number=$(echo "$PR_JSON" | jq -r '.number')" >> "$GITHUB_OUTPUT"
-        echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
-        echo "head_short_sha=${HEAD_SHA:0:7}" >> "$GITHUB_OUTPUT"
         echo "head_branch=$(echo "$PR_JSON" | jq -r '.headRefName')" >> "$GITHUB_OUTPUT"
         echo "head_repo=$(echo "$PR_JSON" | jq -r '.headRepository.owner.login + "/" + .headRepository.name')" >> "$GITHUB_OUTPUT"
         echo "pr_state=$(echo "$PR_JSON" | jq -r '.state')" >> "$GITHUB_OUTPUT"
 
-        # When directly dispatched, always proceed
-        if [[ "$EVENT_NAME" == "workflow_dispatch" && "$WORKFLOW_REF" == *"/${THIS_WORKFLOW}@"* ]]; then
-          echo "Review needed (direct dispatch)"
-          exit 0
+        # Use the provided head SHA if available, otherwise use the one from the PR
+        if [ -n "$INPUT_HEAD_SHA" ]; then
+          HEAD_SHA="$INPUT_HEAD_SHA"
+        else
+          HEAD_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
         fi
-
-        # Check for existing review at this commit
-        EXISTING=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-          --jq "[.[] | select(.user.login == \"${{ github.actor }}\" and (.body | contains(\"${HEAD_SHA}\")))] | length")
-
-        if [ "$EXISTING" -gt "0" ]; then
-          echo "Already reviewed at $HEAD_SHA — skipping"
-          exit 1
-        fi
-
-        echo "Not yet reviewed at $HEAD_SHA — proceeding"
+        echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+        echo "head_short_sha=${HEAD_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
 permissions:
   contents: read
@@ -88,8 +77,6 @@ jobs:
       head_branch: ${{ steps.pr_check.outputs.head_branch }}
       head_repo: ${{ steps.pr_check.outputs.head_repo }}
       pr_state: ${{ steps.pr_check.outputs.pr_state }}
-
-if: needs.pre_activation.outputs.pr_check_result == 'success'
 
 ---
 

@@ -14,6 +14,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: write
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}
@@ -25,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       pr-file-reviewer-matrix: ${{ steps.build-matrix.outputs.pr-file-reviewer-matrix }}
+      # Add additional workflow matrix outputs here
     steps:
       - name: Restore last-successful-run timestamp
         uses: actions/cache/restore@v4
@@ -62,28 +64,57 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SINCE: ${{ steps.since.outputs.since }}
         run: |
-          # Fetch all PRs (open and closed) updated since the last successful run.
-          # The pr-file-reviewer workflow can handle closed PRs too.
+          # Fetch all PRs (open and closed) updated since the last successful run,
+          # including head SHA for cache-based skip checks.
           PRS=$(gh pr list \
             --repo "${{ github.repository }}" \
             --state all \
-            --json number,isDraft,state,updatedAt \
+            --json number,isDraft,state,updatedAt,headRefOid \
             --limit 100 \
             --jq "[.[] | select(.updatedAt >= \"$SINCE\")]")
 
           echo "PRs updated since $SINCE:"
-          echo "$PRS" | jq -r '.[] | "  PR #\(.number) (\(.state)\(if .isDraft then ", draft" else "" end))"'
+          echo "$PRS" | jq -r '.[] | "  PR #\(.number) (\(.state)\(if .isDraft then ", draft" else "" end)) @ \(.headRefOid[:7])"'
           echo "prs=$PRS" >> "$GITHUB_OUTPUT"
 
       - name: Build workflow dispatch matrices
         id: build-matrix
         env:
           PRS: ${{ steps.find-prs.outputs.prs }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
+          #
           # pr-file-reviewer: applies to non-draft PRs (open or closed)
-          PR_FILE_REVIEWER=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == false) | .number]')
-          echo "pr-file-reviewer PRs: $PR_FILE_REVIEWER"
+          #
+          CANDIDATES=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == false)]')
+
+          PR_FILE_REVIEWER="[]"
+          for ROW in $(echo "$CANDIDATES" | jq -c '.[]'); do
+            PR_NUMBER=$(echo "$ROW" | jq -r '.number')
+            HEAD_SHA=$(echo "$ROW" | jq -r '.headRefOid')
+            CACHE_KEY="pr-file-reviewer-${PR_NUMBER}-${HEAD_SHA}"
+            CACHE_EXISTS=$(gh api "repos/${REPO}/actions/caches?key=${CACHE_KEY}" --jq '.total_count')
+
+            if [ "$CACHE_EXISTS" -gt "0" ]; then
+              echo "  pr-file-reviewer: PR #${PR_NUMBER} already reviewed at ${HEAD_SHA:0:7} — skipping"
+            else
+              echo "  pr-file-reviewer: PR #${PR_NUMBER} needs review at ${HEAD_SHA:0:7}"
+              PR_FILE_REVIEWER=$(echo "$PR_FILE_REVIEWER" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\"}]")
+            fi
+          done
+
+          echo "pr-file-reviewer matrix: $PR_FILE_REVIEWER"
           echo "pr-file-reviewer-matrix=$PR_FILE_REVIEWER" >> "$GITHUB_OUTPUT"
+
+          #
+          # Add additional workflow matrix building here.
+          # Each workflow can have its own candidate filtering and cache key prefix.
+          #
+
+  # ──────────────────────────────────────────────
+  # PR File Reviewer
+  # ──────────────────────────────────────────────
 
   pr-file-reviewer:
     name: "PR File Reviewer - PR #${{ matrix.pr_number }}"
@@ -93,16 +124,47 @@ jobs:
       fail-fast: false
       max-parallel: 5
       matrix:
-        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-matrix) }}
+        include: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-matrix) }}
     uses: ./.github/workflows/pr-file-reviewer.lock.yml
     with:
       pr_number: ${{ matrix.pr_number }}
+      head_sha: ${{ matrix.head_sha }}
     secrets: inherit
+
+  record-run_pr-file-reviewer:
+    name: "Record PR File Review - PR #${{ matrix.pr_number }}"
+    needs: [find-prs, pr-file-reviewer]
+    if: always() && needs.pr-file-reviewer.result == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-matrix) }}
+    steps:
+      - name: Save completion marker
+        run: |
+          echo "Recording successful run for PR #${{ matrix.pr_number }} at ${{ matrix.head_sha }}"
+          mkdir -p /tmp/workflow-run-marker
+          echo "reviewed" > /tmp/workflow-run-marker/done
+      - uses: actions/cache/save@v4
+        with:
+          path: /tmp/workflow-run-marker
+          key: pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.head_sha }}
+
+  # ──────────────────────────────────────────────
+  # Add additional PR workflow sections here.
+  # Pattern: workflow job → record-run_<workflow-name> job
+  # ──────────────────────────────────────────────
+
+  # ──────────────────────────────────────────────
+  # Dispatcher bookkeeping
+  # ──────────────────────────────────────────────
 
   record-successful-run:
     name: Record successful run timestamp
     runs-on: ubuntu-latest
-    needs: [find-prs, pr-file-reviewer]
+    needs: [find-prs, pr-file-reviewer, record-run_pr-file-reviewer]
+    # Add additional workflow jobs to the needs list as they are added
     if: always() && needs.find-prs.result == 'success' && needs.pr-file-reviewer.result == 'success'
     steps:
       - name: Write last-successful-run timestamp
