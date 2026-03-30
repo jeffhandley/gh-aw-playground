@@ -14,19 +14,10 @@ on:
         required: true
         type: number
 
-steps:
-  - name: Add eyeballs reaction to PR
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      PR_NUMBER: ${{ inputs.pr_number }}
-      REPO: ${{ github.repository }}
-    run: |
-      gh api "repos/${REPO}/issues/${PR_NUMBER}/reactions" -f content=eyes 2>/dev/null || true
-
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: pr-file-review-${{ inputs.pr_number }}
@@ -46,24 +37,6 @@ safe-outputs:
     max: 1
     discussions: false
     issues: false
-  jobs:
-    remove-eyes-reaction:
-      description: "Remove the eyeballs emoji reaction from the PR, indicating the review is complete"
-      runs-on: ubuntu-slim
-      permissions:
-        pull-requests: write
-      steps:
-        - name: Remove eyeballs reaction
-          env:
-            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            PR_NUMBER: ${{ inputs.pr_number }}
-            REPO: ${{ github.repository }}
-          run: |
-            REACTION_ID=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/reactions" \
-              --jq '.[] | select(.content == "eyes" and .user.login == "github-actions[bot]") | .id' 2>/dev/null || true)
-            if [ -n "$REACTION_ID" ]; then
-              gh api -X DELETE "repos/${REPO}/issues/${PR_NUMBER}/reactions/${REACTION_ID}" 2>/dev/null || true
-            fi
 
 ---
 
