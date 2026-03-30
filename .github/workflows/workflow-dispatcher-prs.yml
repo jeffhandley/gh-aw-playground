@@ -107,9 +107,14 @@ jobs:
               LAST_EVENT_ID="none"
             fi
 
-            PR_LABEL="#${PR_NUMBER}"
+            PR_LABEL="[#${PR_NUMBER}](https://github.com/${REPO}/pull/${PR_NUMBER})"
             if [ "$IS_DRAFT" = "true" ]; then
               PR_LABEL="${PR_LABEL} (draft)"
+            fi
+
+            EVENT_LINK="${LAST_EVENT_ID}"
+            if [ "$LAST_EVENT_ID" != "none" ]; then
+              EVENT_LINK="[${LAST_EVENT_ID}](https://github.com/${REPO}/issues/${PR_NUMBER}/events)"
             fi
 
             # Check if ALL workflows have already processed this PR at this event
@@ -125,12 +130,12 @@ jobs:
 
             if [ "$ALL_CACHED" = "true" ]; then
               echo "PR #${PR_NUMBER} — all workflows completed (event ${LAST_EVENT_ID})"
-              SKIPPED="${SKIPPED}| ${PR_LABEL} | ${STATE} | ${LAST_EVENT_ID} |\n"
+              SKIPPED="${SKIPPED}| ${PR_LABEL} | ${STATE} | ${EVENT_LINK} |\n"
               SKIP_COUNT=$((SKIP_COUNT + 1))
             else
               echo "PR #${PR_NUMBER} — dispatching (event ${LAST_EVENT_ID})"
               MATRIX=$(echo "$MATRIX" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\", \"last_event_id\": \"$LAST_EVENT_ID\"}]")
-              DISPATCHED="${DISPATCHED}| ${PR_LABEL} | ${STATE} | ${LAST_EVENT_ID} |\n"
+              DISPATCHED="${DISPATCHED}| ${PR_LABEL} | ${STATE} | ${EVENT_LINK} |\n"
             fi
           done
 
@@ -144,7 +149,11 @@ jobs:
           {
             echo "## PR Workflow Dispatcher"
             echo ""
-            echo "Lookback: \`${SINCE}\` · Workflows: \`${WORKFLOWS}\`"
+            echo "- **Lookback:** \`${SINCE}\`"
+            echo "- **Workflows:**"
+            for WF in $WORKFLOWS; do
+              echo "  - [\`${WF}\`](https://github.com/${REPO}/blob/main/.github/workflows/${WF}.md)"
+            done
             echo ""
 
             if [ -n "$DISPATCHED" ]; then
