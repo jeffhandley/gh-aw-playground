@@ -77,40 +77,42 @@ jobs:
 
           PR_COUNT=$(echo "$PRS" | jq 'length')
           echo "PRs updated since $SINCE:"
-
           if [ "$PR_COUNT" -eq "0" ]; then
             echo "  (none)"
+          else
+            echo "$PRS" | jq -r '.[] | "  PR #\(.number) (\(.state)\(if .isDraft then ", draft" else "" end)) @ \(.headRefOid[:7])"'
           fi
 
           #
-          # pr-file-reviewer: applies to non-draft PRs (open or closed)
+          # pr-file-reviewer: non-draft PRs (open or closed)
           #
+          echo ""
+          echo "pr-file-reviewer:"
           CANDIDATES=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == false)]')
 
           PR_FILE_REVIEWER="[]"
           for ROW in $(echo "$CANDIDATES" | jq -c '.[]'); do
             PR_NUMBER=$(echo "$ROW" | jq -r '.number')
-            PR_STATE=$(echo "$ROW" | jq -r '.state')
             HEAD_SHA=$(echo "$ROW" | jq -r '.headRefOid')
             CACHE_KEY="pr-file-reviewer-${PR_NUMBER}-${HEAD_SHA}"
             CACHE_EXISTS=$(gh api "repos/${REPO}/actions/caches?key=${CACHE_KEY}" --jq '.total_count')
 
             if [ "$CACHE_EXISTS" -gt "0" ]; then
-              echo "  PR #${PR_NUMBER} (${PR_STATE}) @ ${HEAD_SHA:0:7} — already reviewed"
+              echo "  PR #${PR_NUMBER} — already reviewed at ${HEAD_SHA:0:7}"
             else
-              echo "  PR #${PR_NUMBER} (${PR_STATE}) @ ${HEAD_SHA:0:7} — needs review"
+              echo "  PR #${PR_NUMBER} — needs review at ${HEAD_SHA:0:7}"
               PR_FILE_REVIEWER=$(echo "$PR_FILE_REVIEWER" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\"}]")
             fi
           done
 
-          # Log draft PRs that were skipped
-          DRAFTS=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == true)]')
-          for ROW in $(echo "$DRAFTS" | jq -c '.[]'); do
-            PR_NUMBER=$(echo "$ROW" | jq -r '.number')
-            PR_STATE=$(echo "$ROW" | jq -r '.state')
-            HEAD_SHA=$(echo "$ROW" | jq -r '.headRefOid')
-            echo "  PR #${PR_NUMBER} (${PR_STATE}, draft) @ ${HEAD_SHA:0:7} — skipped (draft)"
-          done
+          DRAFT_COUNT=$(echo "$PRS" | jq '[.[] | select(.isDraft == true)] | length')
+          if [ "$DRAFT_COUNT" -gt "0" ]; then
+            echo "$PRS" | jq -r '.[] | select(.isDraft == true) | "  PR #\(.number) — skipped (draft)"'
+          fi
+
+          if [ "$PR_COUNT" -gt "0" ] && [ "$(echo "$CANDIDATES" | jq 'length')" -eq "0" ] && [ "$DRAFT_COUNT" -eq "0" ]; then
+            echo "  (no eligible PRs)"
+          fi
 
           echo ""
           echo "pr-file-reviewer matrix: $PR_FILE_REVIEWER"
@@ -118,7 +120,7 @@ jobs:
           echo "pr-file-reviewer-include=$PR_FILE_REVIEWER" >> "$GITHUB_OUTPUT"
 
           #
-          # Add additional workflow matrix building here.
+          # Add additional workflow sections here.
           # Each workflow can have its own candidate filtering and cache key prefix.
           #
 
