@@ -1,0 +1,102 @@
+name: PR Review Orchestrator
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'ISO 8601 timestamp — find PRs updated at or after this time (default: since last scheduled run)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: pr-review-orchestrator
+  cancel-in-progress: true
+
+jobs:
+  find-prs:
+    name: Find PRs to review
+    runs-on: ubuntu-latest
+    outputs:
+      pr-file-reviewer-matrix: ${{ steps.build-matrix.outputs.pr-file-reviewer-matrix }}
+    steps:
+      - name: Cache last-run timestamp
+        uses: actions/cache@v4
+        with:
+          path: /tmp/orchestrator
+          key: pr-review-orchestrator-timestamp-${{ github.run_id }}
+          restore-keys: pr-review-orchestrator-timestamp-
+
+      - name: Determine lookback timestamp
+        id: since
+        run: |
+          MANUAL_SINCE="${{ github.event.inputs.since }}"
+          CACHED_SINCE=""
+          if [ -f /tmp/orchestrator/last-run ]; then
+            CACHED_SINCE=$(cat /tmp/orchestrator/last-run)
+          fi
+
+          if [ -n "$MANUAL_SINCE" ]; then
+            SINCE="$MANUAL_SINCE"
+          elif [ -n "$CACHED_SINCE" ]; then
+            SINCE="$CACHED_SINCE"
+          else
+            # First run or expired cache: look back 20 minutes to avoid gaps
+            SINCE=$(date -u -d '20 minutes ago' '+%Y-%m-%dT%H:%M:%SZ')
+          fi
+
+          echo "since=$SINCE" >> "$GITHUB_OUTPUT"
+          echo "Using lookback timestamp: $SINCE"
+
+          # Record current time for next run
+          mkdir -p /tmp/orchestrator
+          date -u '+%Y-%m-%dT%H:%M:%SZ' > /tmp/orchestrator/last-run
+
+      - name: Find PRs updated since last run
+        id: find-prs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SINCE: ${{ steps.since.outputs.since }}
+        run: |
+          # Fetch all PRs (open and closed) updated since the lookback timestamp.
+          # The pr-file-reviewer workflow can handle closed PRs too.
+          PRS=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --state all \
+            --json number,isDraft,state,updatedAt \
+            --limit 100 \
+            --jq "[.[] | select(.updatedAt >= \"$SINCE\")]")
+
+          echo "PRs updated since $SINCE:"
+          echo "$PRS" | jq -r '.[] | "  PR #\(.number) (\(.state)\(if .isDraft then ", draft" else "" end))"'
+          echo "prs=$PRS" >> "$GITHUB_OUTPUT"
+
+      - name: Build workflow dispatch matrices
+        id: build-matrix
+        env:
+          PRS: ${{ steps.find-prs.outputs.prs }}
+        run: |
+          # pr-file-reviewer: applies to non-draft PRs (open or closed)
+          PR_FILE_REVIEWER=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == false) | .number]')
+          echo "pr-file-reviewer PRs: $PR_FILE_REVIEWER"
+          echo "pr-file-reviewer-matrix=$PR_FILE_REVIEWER" >> "$GITHUB_OUTPUT"
+
+  pr-file-reviewer:
+    name: "PR File Reviewer - PR #${{ matrix.pr_number }}"
+    needs: find-prs
+    if: needs.find-prs.outputs.pr-file-reviewer-matrix != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-matrix) }}
+    uses: ./.github/workflows/pr-file-reviewer.lock.yml
+    with:
+      pr_number: ${{ matrix.pr_number }}
+    secrets: inherit
