@@ -1,0 +1,118 @@
+name: PR Workflow Dispatcher
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'ISO 8601 timestamp — find PRs updated at or after this time (default: time of last successful run)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  find-prs:
+    name: Find PRs to dispatch
+    runs-on: ubuntu-latest
+    outputs:
+      pr-file-reviewer-matrix: ${{ steps.build-matrix.outputs.pr-file-reviewer-matrix }}
+    steps:
+      - name: Restore last-successful-run timestamp
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/workflow-dispatcher-prs
+          key: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
+          restore-keys: workflow-dispatcher-prs-timestamp
+
+      - name: Determine lookback timestamp
+        id: since
+        env:
+          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
+        run: |
+          MANUAL_SINCE="${{ github.event.inputs.since }}"
+          CACHED_SINCE=""
+          if [ -f /tmp/workflow-dispatcher-prs/last-successful-run ]; then
+            CACHED_SINCE=$(cat /tmp/workflow-dispatcher-prs/last-successful-run)
+          fi
+
+          if [ -n "$MANUAL_SINCE" ]; then
+            SINCE="$MANUAL_SINCE"
+          elif [ -n "$CACHED_SINCE" ]; then
+            SINCE="$CACHED_SINCE"
+          else
+            # First run or expired cache: look back 20 minutes to avoid gaps
+            SINCE=$(date -u -d '20 minutes ago' '+%Y-%m-%dT%H:%M:%SZ')
+          fi
+
+          echo "since=$SINCE" >> "$GITHUB_OUTPUT"
+          echo "Using lookback timestamp: $SINCE"
+
+      - name: Find PRs updated since last successful run
+        id: find-prs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SINCE: ${{ steps.since.outputs.since }}
+        run: |
+          # Fetch all PRs (open and closed) updated since the last successful run.
+          # The pr-file-reviewer workflow can handle closed PRs too.
+          PRS=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --state all \
+            --json number,isDraft,state,updatedAt \
+            --limit 100 \
+            --jq "[.[] | select(.updatedAt >= \"$SINCE\")]")
+
+          echo "PRs updated since $SINCE:"
+          echo "$PRS" | jq -r '.[] | "  PR #\(.number) (\(.state)\(if .isDraft then ", draft" else "" end))"'
+          echo "prs=$PRS" >> "$GITHUB_OUTPUT"
+
+      - name: Build workflow dispatch matrices
+        id: build-matrix
+        env:
+          PRS: ${{ steps.find-prs.outputs.prs }}
+        run: |
+          # pr-file-reviewer: applies to non-draft PRs (open or closed)
+          PR_FILE_REVIEWER=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == false) | .number]')
+          echo "pr-file-reviewer PRs: $PR_FILE_REVIEWER"
+          echo "pr-file-reviewer-matrix=$PR_FILE_REVIEWER" >> "$GITHUB_OUTPUT"
+
+  pr-file-reviewer:
+    name: "PR File Reviewer - PR #${{ matrix.pr_number }}"
+    needs: find-prs
+    if: needs.find-prs.outputs.pr-file-reviewer-matrix != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        pr_number: ${{ fromJSON(needs.find-prs.outputs.pr-file-reviewer-matrix) }}
+    uses: ./.github/workflows/pr-file-reviewer.lock.yml
+    with:
+      pr_number: ${{ matrix.pr_number }}
+    secrets: inherit
+
+  record-successful-run:
+    name: Record successful run timestamp
+    runs-on: ubuntu-latest
+    needs: [find-prs, pr-file-reviewer]
+    if: always() && needs.find-prs.result == 'success' && (needs.pr-file-reviewer.result == 'success' || needs.pr-file-reviewer.result == 'skipped')
+    steps:
+      - name: Write last-successful-run timestamp
+        env:
+          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
+        run: |
+          mkdir -p /tmp/workflow-dispatcher-prs
+          echo "$WORKFLOW_STARTED_AT" > /tmp/workflow-dispatcher-prs/last-successful-run
+
+      - name: Save last-successful-run timestamp
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/workflow-dispatcher-prs
+          key: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
