@@ -85,7 +85,9 @@ jobs:
 
           # Build a unified matrix of all updated PRs.
           # Each workflow is responsible for its own eligibility filtering.
-          # The dispatcher only checks per-workflow cache markers to avoid re-dispatching.
+          # The dispatcher uses the latest event ID as a cursor — any PR activity
+          # (push, label, close, ready_for_review, etc.) produces a new event ID,
+          # ensuring the PR gets re-dispatched when anything changes.
           WORKFLOWS="pr-file-reviewer pr-labeler"
           MATRIX="[]"
 
@@ -94,10 +96,16 @@ jobs:
             PR_NUMBER=$(echo "$ROW" | jq -r '.number')
             HEAD_SHA=$(echo "$ROW" | jq -r '.headRefOid')
 
-            # Check if ALL workflows have already processed this PR at this SHA
+            # Get the latest event ID for this PR as a change cursor
+            LAST_EVENT_ID=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/events" --jq 'last | .id // empty')
+            if [ -z "$LAST_EVENT_ID" ]; then
+              LAST_EVENT_ID="none"
+            fi
+
+            # Check if ALL workflows have already processed this PR at this event
             ALL_CACHED=true
             for WF in $WORKFLOWS; do
-              CACHE_KEY="${WF}-${PR_NUMBER}-${HEAD_SHA}"
+              CACHE_KEY="${WF}-${PR_NUMBER}-${LAST_EVENT_ID}"
               CACHE_EXISTS=$(gh api "repos/${REPO}/actions/caches?key=${CACHE_KEY}" --jq '.total_count')
               if [ "$CACHE_EXISTS" -eq "0" ]; then
                 ALL_CACHED=false
@@ -106,10 +114,10 @@ jobs:
             done
 
             if [ "$ALL_CACHED" = "true" ]; then
-              echo "PR #${PR_NUMBER} — all workflows completed at ${HEAD_SHA:0:7}"
+              echo "PR #${PR_NUMBER} — all workflows completed (event ${LAST_EVENT_ID})"
             else
-              echo "PR #${PR_NUMBER} — dispatching at ${HEAD_SHA:0:7}"
-              MATRIX=$(echo "$MATRIX" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\"}]")
+              echo "PR #${PR_NUMBER} — dispatching (event ${LAST_EVENT_ID})"
+              MATRIX=$(echo "$MATRIX" | jq -c ". + [{\"pr_number\": $PR_NUMBER, \"head_sha\": \"$HEAD_SHA\", \"last_event_id\": \"$LAST_EVENT_ID\"}]")
             fi
           done
 
@@ -152,19 +160,19 @@ jobs:
     steps:
       - name: Save completion marker
         run: |
-          echo "Recording successful run for PR #${{ matrix.pr_number }} at ${{ matrix.head_sha }}"
+          echo "Recording successful run for PR #${{ matrix.pr_number }} (event ${{ matrix.last_event_id }})"
           mkdir -p /tmp/workflow-run-marker
-          echo "${{ matrix.head_sha }}" > /tmp/workflow-run-marker/head_sha
+          echo "${{ matrix.last_event_id }}" > /tmp/workflow-run-marker/last_event_id
       - uses: actions/cache/save@v4
         with:
           path: /tmp/workflow-run-marker
-          key: pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.head_sha }}
+          key: pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.last_event_id }}
       - name: Clean up old markers for this PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          CURRENT_KEY="pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.head_sha }}"
+          CURRENT_KEY="pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.last_event_id }}"
           gh api "repos/${REPO}/actions/caches?key=pr-file-reviewer-${{ matrix.pr_number }}-" --jq '.actions_caches[].key' | while read -r KEY; do
             if [ "$KEY" != "$CURRENT_KEY" ]; then
               gh api -X DELETE "repos/${REPO}/actions/caches?key=${KEY}" 2>/dev/null || true
@@ -210,19 +218,19 @@ jobs:
     steps:
       - name: Save completion marker
         run: |
-          echo "Recording successful run for PR #${{ matrix.pr_number }} at ${{ matrix.head_sha }}"
+          echo "Recording successful run for PR #${{ matrix.pr_number }} (event ${{ matrix.last_event_id }})"
           mkdir -p /tmp/workflow-run-marker
-          echo "${{ matrix.head_sha }}" > /tmp/workflow-run-marker/head_sha
+          echo "${{ matrix.last_event_id }}" > /tmp/workflow-run-marker/last_event_id
       - uses: actions/cache/save@v4
         with:
           path: /tmp/workflow-run-marker
-          key: pr-labeler-${{ matrix.pr_number }}-${{ matrix.head_sha }}
+          key: pr-labeler-${{ matrix.pr_number }}-${{ matrix.last_event_id }}
       - name: Clean up old markers for this PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          CURRENT_KEY="pr-labeler-${{ matrix.pr_number }}-${{ matrix.head_sha }}"
+          CURRENT_KEY="pr-labeler-${{ matrix.pr_number }}-${{ matrix.last_event_id }}"
           gh api "repos/${REPO}/actions/caches?key=pr-labeler-${{ matrix.pr_number }}-" --jq '.actions_caches[].key' | while read -r KEY; do
             if [ "$KEY" != "$CURRENT_KEY" ]; then
               gh api -X DELETE "repos/${REPO}/actions/caches?key=${KEY}" 2>/dev/null || true
