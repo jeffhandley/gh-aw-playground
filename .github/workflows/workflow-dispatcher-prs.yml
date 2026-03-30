@@ -53,8 +53,9 @@ jobs:
           elif [ -n "$CACHED_SINCE" ]; then
             SINCE="$CACHED_SINCE"
           else
-            # First run or expired cache: look back 20 minutes to avoid gaps
-            SINCE=$(date -u -d '20 minutes ago' '+%Y-%m-%dT%H:%M:%SZ')
+            # First run or expired cache: look back to the beginning of today (UTC)
+            SINCE=$(date -u '+%Y-%m-%dT00:00:00Z')
+            echo "::notice::No previous run found — falling back to beginning of today (UTC): $SINCE"
           fi
 
           echo "since=$SINCE" >> "$GITHUB_OUTPUT"
