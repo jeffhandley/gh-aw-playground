@@ -121,11 +121,11 @@ jobs:
           echo "pr-file-reviewer-include=$PR_FILE_REVIEWER" >> "$GITHUB_OUTPUT"
 
           #
-          # pr-labeler: non-draft, open PRs only
+          # pr-labeler: non-draft PRs (open or closed)
           #
           echo ""
           echo "pr-labeler:"
-          LABELER_CANDIDATES=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == false and .state == "OPEN")]')
+          LABELER_CANDIDATES=$(echo "$PRS" | jq -c '[.[] | select(.isDraft == false)]')
 
           PR_LABELER="[]"
           for ROW in $(echo "$LABELER_CANDIDATES" | jq -c '.[]'); do
@@ -145,11 +145,6 @@ jobs:
           DRAFT_COUNT=$(echo "$PRS" | jq '[.[] | select(.isDraft == true)] | length')
           if [ "$DRAFT_COUNT" -gt "0" ]; then
             echo "$PRS" | jq -r '.[] | select(.isDraft == true) | "  PR #\(.number) — skipped (draft)"'
-          fi
-
-          CLOSED_COUNT=$(echo "$PRS" | jq '[.[] | select(.isDraft == false and .state != "OPEN")] | length')
-          if [ "$CLOSED_COUNT" -gt "0" ]; then
-            echo "$PRS" | jq -r '.[] | select(.isDraft == false and .state != "OPEN") | "  PR #\(.number) — skipped (not open)"'
           fi
 
           if [ "$PR_COUNT" -gt "0" ] && [ "$(echo "$LABELER_CANDIDATES" | jq 'length')" -eq "0" ]; then
