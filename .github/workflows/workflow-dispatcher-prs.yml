@@ -114,7 +114,7 @@ jobs:
 
             EVENT_LINK="${LAST_EVENT_ID}"
             if [ "$LAST_EVENT_ID" != "none" ]; then
-              EVENT_LINK="[${LAST_EVENT_ID}](https://github.com/${REPO}/issues/${PR_NUMBER}/events)"
+              EVENT_LINK="[${LAST_EVENT_ID}](https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/events)"
             fi
 
             # Check if ALL workflows have already processed this PR at this event
