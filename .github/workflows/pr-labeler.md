@@ -101,6 +101,7 @@ if: needs.pre_activation.outputs.eligible_result == 'success'
 tools:
   github:
     toolsets: [default]
+    min-integrity: none
 
 safe-outputs:
   add-labels:
