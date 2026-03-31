@@ -260,12 +260,12 @@ jobs:
       - name: Update dispatcher state
         env:
           PR_INCLUDE: ${{ needs.poll-prs.outputs.pr-include }}
-          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
           EVENT_NAME: ${{ github.event_name }}
           MANUAL_SINCE: ${{ github.event.inputs.since }}
         run: |
           STATE_FILE="/tmp/dispatcher-state/state.json"
           PRUNE_DAYS=30
+          RUN_TIMESTAMP=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
           mkdir -p /tmp/dispatcher-state
 
           # Load existing state or start fresh
@@ -284,7 +284,7 @@ jobs:
 
           STATE=$(echo "$STATE" | jq \
             --arg event "$EVENT_NAME" \
-            --arg timestamp "$WORKFLOW_STARTED_AT" \
+            --arg timestamp "$RUN_TIMESTAMP" \
             --argjson manual_since "$MANUAL_SINCE_JSON" \
             '.dispatcher = {event: $event, timestamp: $timestamp, manual_since: $manual_since}')
 
@@ -306,7 +306,7 @@ jobs:
                 --arg pr "$PR_NUM" \
                 --arg event_id "$EVENT_ID" \
                 --arg head_sha "$HEAD_SHA" \
-                --arg timestamp "$WORKFLOW_STARTED_AT" \
+                --arg timestamp "$RUN_TIMESTAMP" \
                 '.workflows[$wf][$pr] = {event_id: $event_id, head_sha: $head_sha, timestamp: $timestamp}')
             done
 
