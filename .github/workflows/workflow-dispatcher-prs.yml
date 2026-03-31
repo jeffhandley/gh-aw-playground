@@ -20,6 +20,9 @@ concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
 
+env:
+  DISPATCHED_WORKFLOWS: "pr-file-reviewer pr-labeler"
+
 jobs:
   poll-prs:
     name: Poll PRs
@@ -28,28 +31,30 @@ jobs:
       pr-numbers: ${{ steps.build-matrix.outputs.pr-numbers }}
       pr-include: ${{ steps.build-matrix.outputs.pr-include }}
     steps:
-      - name: Restore last-successful-run timestamp
+      - name: Restore dispatcher state
         uses: actions/cache/restore@v5
         with:
-          path: /tmp/workflow-dispatcher-prs
-          key: workflow-dispatcher-prs-timestamp-
-          restore-keys: workflow-dispatcher-prs-timestamp-
+          path: /tmp/dispatcher-state
+          key: workflow-dispatcher-prs-${{ github.run_id }}
+          restore-keys: workflow-dispatcher-prs-
 
       - name: Determine lookback timestamp
         id: since
         env:
-          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
+          MANUAL_SINCE: ${{ github.event.inputs.since }}
         run: |
-          MANUAL_SINCE="${{ github.event.inputs.since }}"
-          CACHED_SINCE=""
-          if [ -f /tmp/workflow-dispatcher-prs/last-successful-run ]; then
-            CACHED_SINCE=$(cat /tmp/workflow-dispatcher-prs/last-successful-run)
+          STATE_FILE="/tmp/dispatcher-state/state.json"
+
+          # Read dispatcher state from cache
+          STORED_SINCE=""
+          if [ -f "$STATE_FILE" ]; then
+            STORED_SINCE=$(jq -r '.dispatcher.timestamp // empty' "$STATE_FILE")
           fi
 
           if [ -n "$MANUAL_SINCE" ]; then
             SINCE="$MANUAL_SINCE"
-          elif [ -n "$CACHED_SINCE" ]; then
-            SINCE="$CACHED_SINCE"
+          elif [ -n "$STORED_SINCE" ]; then
+            SINCE="$STORED_SINCE"
           else
             # First run or expired cache: look back to the beginning of today (UTC)
             SINCE=$(date -u '+%Y-%m-%dT00:00:00Z')
@@ -67,7 +72,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           # Fetch all PRs (open and closed) updated since the last successful run,
-          # including head SHA for cache-based skip checks.
+          # including head SHA for skip checks.
           PRS=$(gh pr list \
             --repo "$REPO" \
             --state all \
@@ -88,7 +93,8 @@ jobs:
           # The dispatcher uses the latest event ID as a cursor — any PR activity
           # (push, label, close, ready_for_review, etc.) produces a new event ID,
           # ensuring the PR gets re-dispatched when anything changes.
-          WORKFLOWS="pr-file-reviewer pr-labeler"
+          STATE_FILE="/tmp/dispatcher-state/state.json"
+
           MATRIX="[]"
           DISPATCHED=""
           SKIPPED=""
@@ -118,17 +124,20 @@ jobs:
             fi
 
             # Check if ALL workflows have already processed this PR at this event
-            ALL_CACHED=true
-            for WF in $WORKFLOWS; do
-              CACHE_KEY="${WF}-${PR_NUMBER}-${LAST_EVENT_ID}"
-              CACHE_EXISTS=$(gh api "repos/${REPO}/actions/caches?key=${CACHE_KEY}" --jq '.total_count')
-              if [ "$CACHE_EXISTS" -eq "0" ]; then
-                ALL_CACHED=false
-                break
-              fi
-            done
+            ALL_PROCESSED=true
+            if [ -f "$STATE_FILE" ]; then
+              for WF in $DISPATCHED_WORKFLOWS; do
+                STORED_EVENT=$(jq -r --arg wf "$WF" --arg pr "$PR_NUMBER" '.workflows[$wf][$pr].event_id // empty' "$STATE_FILE")
+                if [ "$STORED_EVENT" != "$LAST_EVENT_ID" ]; then
+                  ALL_PROCESSED=false
+                  break
+                fi
+              done
+            else
+              ALL_PROCESSED=false
+            fi
 
-            if [ "$ALL_CACHED" = "true" ]; then
+            if [ "$ALL_PROCESSED" = "true" ]; then
               echo "PR #${PR_NUMBER} — all workflows completed (event ${LAST_EVENT_ID})"
               SKIPPED="${SKIPPED}| ${PR_LABEL} | ${STATE} | ${EVENT_LINK} |\n"
               SKIP_COUNT=$((SKIP_COUNT + 1))
@@ -151,7 +160,7 @@ jobs:
             echo ""
             echo "- **Lookback:** \`${SINCE}\`"
             echo "- **Workflows:**"
-            for WF in $WORKFLOWS; do
+            for WF in $DISPATCHED_WORKFLOWS; do
               echo "  - [\`${WF}\`](https://github.com/${REPO}/blob/main/.github/workflows/${WF}.md)"
             done
             echo ""
@@ -201,41 +210,8 @@ jobs:
       artifact_id: pr-file-reviewer
     secrets: inherit
 
-  record-run_pr-file-reviewer:
-    name: 'Record: pr-file-reviewer'
-    needs: [poll-prs, pr-file-reviewer]
-    if: always() && needs.pr-file-reviewer.result != 'failure' && needs.poll-prs.outputs.pr-numbers != '[]'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        pr_number: ${{ fromJSON(needs.poll-prs.outputs.pr-numbers) }}
-        include: ${{ fromJSON(needs.poll-prs.outputs.pr-include) }}
-    steps:
-      - name: Save completion marker
-        run: |
-          echo "Recording successful run for PR #${{ matrix.pr_number }} (event ${{ matrix.last_event_id }})"
-          mkdir -p /tmp/workflow-run-marker
-          echo "${{ matrix.last_event_id }}" > /tmp/workflow-run-marker/last_event_id
-      - uses: actions/cache/save@v5
-        with:
-          path: /tmp/workflow-run-marker
-          key: pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.last_event_id }}
-      - name: Clean up old markers for this PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          CURRENT_KEY="pr-file-reviewer-${{ matrix.pr_number }}-${{ matrix.last_event_id }}"
-          gh api "repos/${REPO}/actions/caches?key=pr-file-reviewer-${{ matrix.pr_number }}-" --jq '.actions_caches[].key' | while read -r KEY; do
-            if [ "$KEY" != "$CURRENT_KEY" ]; then
-              gh api -X DELETE "repos/${REPO}/actions/caches?key=${KEY}" 2>/dev/null || true
-            fi
-          done
-
   # ──────────────────────────────────────────────
   # Add additional PR workflow sections here.
-  # Pattern: dispatch job → record job
   # ──────────────────────────────────────────────
 
   # ──────────────────────────────────────────────
@@ -259,38 +235,6 @@ jobs:
       artifact_id: pr-labeler
     secrets: inherit
 
-  record-run_pr-labeler:
-    name: 'Record: pr-labeler'
-    needs: [poll-prs, pr-labeler]
-    if: always() && needs.pr-labeler.result != 'failure' && needs.poll-prs.outputs.pr-numbers != '[]'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        pr_number: ${{ fromJSON(needs.poll-prs.outputs.pr-numbers) }}
-        include: ${{ fromJSON(needs.poll-prs.outputs.pr-include) }}
-    steps:
-      - name: Save completion marker
-        run: |
-          echo "Recording successful run for PR #${{ matrix.pr_number }} (event ${{ matrix.last_event_id }})"
-          mkdir -p /tmp/workflow-run-marker
-          echo "${{ matrix.last_event_id }}" > /tmp/workflow-run-marker/last_event_id
-      - uses: actions/cache/save@v5
-        with:
-          path: /tmp/workflow-run-marker
-          key: pr-labeler-${{ matrix.pr_number }}-${{ matrix.last_event_id }}
-      - name: Clean up old markers for this PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          CURRENT_KEY="pr-labeler-${{ matrix.pr_number }}-${{ matrix.last_event_id }}"
-          gh api "repos/${REPO}/actions/caches?key=pr-labeler-${{ matrix.pr_number }}-" --jq '.actions_caches[].key' | while read -r KEY; do
-            if [ "$KEY" != "$CURRENT_KEY" ]; then
-              gh api -X DELETE "repos/${REPO}/actions/caches?key=${KEY}" 2>/dev/null || true
-            fi
-          done
-
   # ──────────────────────────────────────────────
   # Conclusion
   # ──────────────────────────────────────────────
@@ -298,34 +242,96 @@ jobs:
   conclusion:
     name: Conclusion
     runs-on: ubuntu-latest
-    needs: [poll-prs, pr-file-reviewer, record-run_pr-file-reviewer, pr-labeler, record-run_pr-labeler]
-    # Add additional workflow jobs to the needs list as they are added
+    needs: [poll-prs, pr-file-reviewer, pr-labeler]
+    # Add additional workflow dispatch jobs to the needs list as they are added
     if: >-
       always()
       && needs.poll-prs.result == 'success'
       && needs.pr-file-reviewer.result != 'failure'
       && needs.pr-labeler.result != 'failure'
     steps:
-      - name: Write last-successful-run timestamp
-        env:
-          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
-        run: |
-          mkdir -p /tmp/workflow-dispatcher-prs
-          echo "$WORKFLOW_STARTED_AT" > /tmp/workflow-dispatcher-prs/last-successful-run
+      - name: Restore dispatcher state
+        uses: actions/cache/restore@v5
+        with:
+          path: /tmp/dispatcher-state
+          key: workflow-dispatcher-prs-${{ github.run_id }}
+          restore-keys: workflow-dispatcher-prs-
 
-      - name: Save last-successful-run timestamp
+      - name: Update dispatcher state
+        env:
+          PR_INCLUDE: ${{ needs.poll-prs.outputs.pr-include }}
+          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_SINCE: ${{ github.event.inputs.since }}
+        run: |
+          STATE_FILE="/tmp/dispatcher-state/state.json"
+          PRUNE_DAYS=30
+          mkdir -p /tmp/dispatcher-state
+
+          # Load existing state or start fresh
+          if [ -f "$STATE_FILE" ]; then
+            STATE=$(cat "$STATE_FILE")
+          else
+            STATE='{"dispatcher":{},"workflows":{}}'
+          fi
+
+          # Update dispatcher metadata
+          if [ -n "$MANUAL_SINCE" ]; then
+            MANUAL_SINCE_JSON="\"$MANUAL_SINCE\""
+          else
+            MANUAL_SINCE_JSON="null"
+          fi
+
+          STATE=$(echo "$STATE" | jq \
+            --arg event "$EVENT_NAME" \
+            --arg timestamp "$WORKFLOW_STARTED_AT" \
+            --argjson manual_since "$MANUAL_SINCE_JSON" \
+            '.dispatcher = {event: $event, timestamp: $timestamp, manual_since: $manual_since}')
+
+          # Update workflow state with dispatched PRs
+          CUTOFF_DATE=$(date -u -d "${PRUNE_DAYS} days ago" '+%Y-%m-%dT%H:%M:%SZ')
+
+          for WF in $DISPATCHED_WORKFLOWS; do
+            # Ensure the workflow key exists
+            STATE=$(echo "$STATE" | jq --arg wf "$WF" '.workflows[$wf] //= {}')
+
+            # Add/update entries for dispatched PRs
+            for ROW in $(echo "$PR_INCLUDE" | jq -c '.[]'); do
+              PR_NUM=$(echo "$ROW" | jq -r '.pr_number')
+              HEAD_SHA=$(echo "$ROW" | jq -r '.head_sha')
+              EVENT_ID=$(echo "$ROW" | jq -r '.last_event_id')
+
+              STATE=$(echo "$STATE" | jq \
+                --arg wf "$WF" \
+                --arg pr "$PR_NUM" \
+                --arg event_id "$EVENT_ID" \
+                --arg head_sha "$HEAD_SHA" \
+                --arg timestamp "$WORKFLOW_STARTED_AT" \
+                '.workflows[$wf][$pr] = {event_id: $event_id, head_sha: $head_sha, timestamp: $timestamp}')
+            done
+
+            # Prune entries older than 30 days
+            STATE=$(echo "$STATE" | jq --arg wf "$WF" --arg cutoff "$CUTOFF_DATE" \
+              '.workflows[$wf] = (.workflows[$wf] | to_entries | map(select(.value.timestamp >= $cutoff)) | from_entries)')
+          done
+
+          echo "$STATE" | jq '.' > "$STATE_FILE"
+          echo "State updated:"
+          jq '.' "$STATE_FILE"
+
+      - name: Save dispatcher state
         uses: actions/cache/save@v5
         with:
-          path: /tmp/workflow-dispatcher-prs
-          key: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
+          path: /tmp/dispatcher-state
+          key: workflow-dispatcher-prs-${{ github.run_id }}
 
-      - name: Clean up old timestamp cache entries
+      - name: Clean up old state cache entries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          CURRENT_KEY: workflow-dispatcher-prs-timestamp-${{ github.run_id }}
+          CURRENT_KEY: workflow-dispatcher-prs-${{ github.run_id }}
         run: |
-          gh api "repos/${REPO}/actions/caches?key=workflow-dispatcher-prs-timestamp-" --jq '.actions_caches[].key' | while read -r KEY; do
+          gh api "repos/${REPO}/actions/caches?key=workflow-dispatcher-prs-" --jq '.actions_caches[].key' | while read -r KEY; do
             if [ "$KEY" != "$CURRENT_KEY" ]; then
               gh api -X DELETE "repos/${REPO}/actions/caches?key=${KEY}" 2>/dev/null || true
             fi
