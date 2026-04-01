@@ -24,6 +24,8 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
   bots:
+    - "Copilot"
+    - "app/copilot-swe-agent"
     - "copilot-swe-agent"
     - "copilot-swe-agent[bot]"
   permissions:
@@ -96,7 +98,7 @@ on:
         echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
         echo "head_short_sha=${HEAD_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
-        if [ "$PR_AUTHOR" = "copilot-swe-agent" ]; then
+        if [ "$PR_AUTHOR" = "Copilot" ] || [ "$PR_AUTHOR" = "app/copilot-swe-agent" ] || [ "$PR_AUTHOR" = "copilot-swe-agent" ] || [ "$PR_AUTHOR" = "copilot-swe-agent[bot]" ]; then
           echo "is_copilot_swe_agent=true" >> "$GITHUB_OUTPUT"
         else
           echo "is_copilot_swe_agent=false" >> "$GITHUB_OUTPUT"
