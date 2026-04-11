@@ -1,4 +1,7 @@
 ---
+imports:
+  - shared/log-dispatch-inputs.md
+
 on:
   slash_command: echo
   workflow_dispatch:
@@ -11,27 +14,6 @@ on:
         description: "The command text to echo back"
         required: true
         type: string
-  steps:
-    - name: Summarize workflow_dispatch inputs
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      shell: bash
-      env:
-        INPUT_ITEM_NUMBER: ${{ github.event.inputs.item_number || '' }}
-        INPUT_COMMAND: ${{ github.event.inputs.command || '' }}
-      run: |
-        escape_summary_cell() {
-          printf '%s' "$1" | sed ':a;N;$!ba;s/&/\&amp;/g;s/</\&lt;/g;s/>/\&gt;/g;s/\r//g;s/\n/<br>/g;s/|/\\|/g'
-        }
-
-        {
-          echo
-          echo '## workflow_dispatch inputs'
-          echo
-          echo '| Input | Value |'
-          echo '| --- | --- |'
-          printf '| `item_number` | <code>%s</code> |\n' "$(escape_summary_cell "$INPUT_ITEM_NUMBER")"
-          printf '| `command` | <code>%s</code> |\n' "$(escape_summary_cell "$INPUT_COMMAND")"
-        } >> "$GITHUB_STEP_SUMMARY"
 permissions:
   contents: read
 safe-outputs:
