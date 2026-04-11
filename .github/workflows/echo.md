@@ -24,7 +24,7 @@ safe-outputs:
     hide-older-comments: true
     discussions: false
     allowed-reasons: [outdated]
-    target: ${{ github.event.inputs.issue_number || "triggering" }}
+    target: ${{ github.event.inputs.issue_number || 'triggering' }}
   messages:
     run-started: "⚙️ _Echo is starting..._"
     run-success: "✔️ _Echo completed._"
