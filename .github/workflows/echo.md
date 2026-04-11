@@ -5,6 +5,10 @@ on:
   reaction: "rocket"
   workflow_dispatch:
     inputs:
+      issue_number:
+        type: string
+        description: "Issue number to run on"
+        required: true
       command:
         type: string
         description: "Command to invoke, excluding the leading `/`"
@@ -20,6 +24,7 @@ safe-outputs:
     hide-older-comments: true
     discussions: false
     allowed-reasons: [outdated]
+    target: ${{ github.event.inputs.issue_number || "triggering" }}
   messages:
     run-started: "⚙️ _Echo is starting..._"
     run-success: "✔️ _Echo completed._"
@@ -43,3 +48,7 @@ Add a comment to echo the command that was used to invoke this workflow:
 > You invoked the workflow using the following slash_command:
 > `/${{ needs.activation.outputs.slash_command }}`
 {{ /if }}
+
+The full context is:
+
+${{ steps.sanitized.outputs.text }}
