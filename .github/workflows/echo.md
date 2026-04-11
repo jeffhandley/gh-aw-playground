@@ -1,17 +1,15 @@
 ---
 # Trigger - when should this workflow run?
-on: /echo
-
-# Permissions - what can this workflow access?
-# Write operations (creating issues, PRs, comments, etc.) are handled
-# automatically by the safe-outputs job with its own scoped permissions.
-permissions:
-  contents: read
-  issues: read
-  pull-requests: read
-
-# Network access
-network: defaults
+on:
+  slash_command: echo
+  reaction: "rocket"
+  status-comment: false
+  workflow_dispatch:
+    inputs:
+      command:
+        type: string
+        description: "Command to invoke, excluding the leading `/`"
+        required: true
 
 # Outputs - what APIs and tools can the AI use?
 safe-outputs:
@@ -27,4 +25,12 @@ safe-outputs:
 
 Add a comment to echo the command that was used to invoke this workflow:
 
-> You invoked the workflow using: `/${{ needs.activation.outputs.slash_command }}`
+{{ #if github.event_name == 'workflow_dispatch' }}
+> You manually dispatched the workflow with the following command:
+> `/${{ github.event.inputs.command }}`
+{{ /if }}
+
+{{ #if needs.activation.outputs.slash_command }}
+> You invoked the workflow using the following slash_command:
+> `/${{ needs.activation.outputs.slash_command }}`
+{{ /if }}
