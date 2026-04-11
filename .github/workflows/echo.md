@@ -3,7 +3,6 @@
 on:
   slash_command: echo
   reaction: "rocket"
-  status-comment: false
   workflow_dispatch:
     inputs:
       command:
